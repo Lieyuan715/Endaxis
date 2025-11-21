@@ -1,71 +1,88 @@
+/* ==========================================================================
+   1. 全局重置与基础设置 (Global Reset & Basics)
+   ========================================================================== */
 body, html, #app {
-  margin: 0; padding: 0; width: 100%; height: 100vh;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100vh;
+  /* 统一字体栈，确保多平台显示一致 */
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  background-color: #2c2c2c; color: #f0f0f0;
+  background-color: #2c2c2c;
+  color: #f0f0f0;
+  /* 防止页面整体出现滚动条，滚动应由内部容器处理 */
+  overflow: hidden;
 }
-.hidden { display: none !important; }
 
+/* 通用工具类 */
+.hidden {
+  display: none !important;
+}
+
+/* ==========================================================================
+   2. 技能库组件样式 (ActionLibrary Component)
+   注意：虽然 .skill-item 在组件中可能也是 scoped，但如果作为通用样式可保留在此
+   ========================================================================== */
 .skill-item {
-  height: 50px; width: fit-content; padding: 0 20px;
-  display: flex; align-items: center; justify-content: center;
-  background-color: #4f4f4f; border: 1px solid #666;
-  box-sizing: border-box; border-radius: 4px;
-  cursor: grab; font-weight: bold; color: white;
-  user-select: none; -webkit-user-select: none;
+  height: 50px;
+  width: fit-content;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #4f4f4f;
+  border: 1px solid #666;
+  box-sizing: border-box;
+  border-radius: 4px;
+  cursor: grab;
+  font-weight: bold;
+  color: white;
+  /* 禁止文本选中，优化拖拽体验 */
+  user-select: none;
+  -webkit-user-select: none;
+  transition: all 0.2s;
 }
-.skill-item:hover { background-color: #5a5a5a; border-color: #999; }
 
-.lib-ghost-item { opacity: 0.5 !important; background-color: #333 !important; border: 1px solid #555 !important; }
+.skill-item:hover {
+  background-color: #5a5a5a;
+  border-color: #999;
+}
 
-.blue-drag-proxy {
-  transition: none !important;
+.skill-item:active {
+  cursor: grabbing;
+}
 
-  position: fixed !important;
+/* ==========================================================================
+   3. 交互状态管理 (Interaction States)
+   此处主要处理跨组件的拖拽交互样式
+   ========================================================================== */
 
-  margin: 0 !important;
+/**
+ * [交互优化] 库模式拖拽状态
+ * 场景：当从左侧技能库拖拽新技能时 (ActionLibrary -> TimelineGrid)
+ * 作用：将轨道上已存在的动作块设为 pointer-events: none。
+ * 目的：防止已存在的块拦截 drop 事件，确保新技能可以放置在它们“上方”或“缝隙”中的轨道上。
+ */
+body.is-lib-dragging .action-item-wrapper {
+  pointer-events: none !important;
+  opacity: 0.7;
+}
 
-  width: calc(var(--duration) * 50px) !important;
-  height: 50px !important;
+/**
+ * [视觉反馈] 轨道内拖拽高亮 (蓝色幽灵效果)
+ * 场景：在 TimelineGrid 内部拖拽调整动作块位置时
+ * 作用：高亮当前正在被移动的块，提升层级。
+ */
+.action-item-wrapper.is-moving {
   background-color: #4a90e2 !important;
   border: 2px dashed #ffffff !important;
   opacity: 0.9 !important;
-  display: flex !important;
-  align-items: center;
-  justify-content: center;
+  /* 确保拖拽体浮在所有其他元素（包括 Grid 线和连接线）之上 */
+  z-index: 100 !important;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3) !important;
+  cursor: grabbing !important;
+  /* [关键] 必须关闭过渡，否则拖拽会有延迟/滞后感 */
+  transition: none !important;
   border-radius: 0 !important;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-
-  z-index: 999999 !important;
-  pointer-events: none !important;
-  padding: 0 !important;
-  white-space: nowrap !important;
-  flex-direction: row !important;
-  font-size: 14px !important;
-  box-sizing: border-box !important;
-
-  transform-origin: top left !important;
 }
 
-.timeline-dragging-item {
-  background-color: #4a90e2 !important; opacity: 0.9; border: 2px dashed #fff; z-index: 9999;
-}
-
-.actions-container .skill-ghost {
-  opacity: 0 !important;
-  pointer-events: none !important;
-  z-index: -1 !important;
-}
-
-body.is-dragging-from-library .actions-container::after {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; width: 100%; height: 100%;
-  z-index: -1;
-  background-color: transparent;
-}
-
-body.is-dragging-from-library .actions-container .action-item-wrapper {
-  pointer-events: none !important;
-}
-
-.sortable-fallback { z-index: 99999 !important; opacity: 1 !important; }

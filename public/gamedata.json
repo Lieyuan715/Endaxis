@@ -1,4 +1,9 @@
 {
+  "SYSTEM_CONSTANTS": {
+    "MAX_SP": 300,
+    "SP_REGEN_PER_SEC": 8,
+    "SKILL_SP_COST_DEFAULT": 100
+  },
   "ICON_DATABASE": {
     "break": "/icons/break.png",
     "armor_break": "/icons/armor_break.png",
@@ -43,7 +48,7 @@
       "attack_anomalies": [],
       "skill_duration": 2,
       "skill_cooldown": 0,
-      "skill_spCost": 30,
+      "skill_spCost": 100,
       "skill_spGain": 0,
       "skill_allowed_types": [
         "stagger",
@@ -78,7 +83,17 @@
       "ultimate_allowed_types": [
         "default"
       ],
-      "ultimate_anomalies": []
+      "ultimate_anomalies": [],
+      "ultimate_gaugeMax": 100,
+      "skill_spReply": 0,
+      "ultimate_spReply": 0,
+      "ultimate_gaugeReply": 0,
+      "skill_gaugeGain": 0,
+      "link_gaugeGain": 0,
+      "execution_duration": 1.5,
+      "execution_spGain": 20,
+      "execution_allowed_types": [],
+      "execution_anomalies": []
     },
     {
       "id": "POGRANICHNIK",
@@ -109,7 +124,17 @@
       "ultimate_spCost": 80,
       "ultimate_spGain": 0,
       "ultimate_allowed_types": [],
-      "ultimate_anomalies": []
+      "ultimate_anomalies": [],
+      "ultimate_gaugeMax": 1000,
+      "skill_spReply": 0,
+      "ultimate_spReply": 0,
+      "ultimate_gaugeReply": 0,
+      "skill_gaugeGain": 0,
+      "link_gaugeGain": 0,
+      "execution_duration": 1.5,
+      "execution_spGain": 20,
+      "execution_allowed_types": [],
+      "execution_anomalies": []
     },
     {
       "id": "CHENQIANYU",
@@ -120,14 +145,14 @@
       "attack_duration": 2.5,
       "attack_cooldown": 0,
       "attack_spCost": 0,
-      "attack_spGain": 10,
+      "attack_spGain": 15,
       "attack_allowed_types": [
         "default"
       ],
       "attack_anomalies": [],
       "skill_duration": 2,
       "skill_cooldown": 0,
-      "skill_spCost": 30,
+      "skill_spCost": 100,
       "skill_spGain": 0,
       "skill_allowed_types": [
         "break",
@@ -164,7 +189,17 @@
       "ultimate_allowed_types": [
         "default"
       ],
-      "ultimate_anomalies": []
+      "ultimate_anomalies": [],
+      "ultimate_gaugeMax": 1000,
+      "skill_spReply": 0,
+      "ultimate_spReply": 0,
+      "ultimate_gaugeReply": 0,
+      "skill_gaugeGain": 0,
+      "link_gaugeGain": 0,
+      "execution_duration": 1.5,
+      "execution_spGain": 20,
+      "execution_allowed_types": [],
+      "execution_anomalies": []
     },
     {
       "id": "ALESH",
@@ -173,29 +208,48 @@
       "avatar": "/avatars/ALESH.png",
       "exclusive_buffs": [],
       "attack_duration": 3,
-      "attack_cooldown": 3,
       "attack_spCost": 0,
       "attack_spGain": 10,
-      "attack_allowed_types": [],
+      "attack_allowed_types": [
+        "default"
+      ],
       "attack_anomalies": [],
       "skill_duration": 2,
-      "skill_cooldown": 12,
-      "skill_spCost": 30,
+      "skill_spCost": 100,
       "skill_spGain": 0,
       "skill_allowed_types": [],
       "skill_anomalies": [],
-      "link_duration": 1,
-      "link_cooldown": 1,
+      "link_duration": 1.5,
+      "link_cooldown": 5,
       "link_spCost": 0,
-      "link_spGain": 0,
-      "link_allowed_types": [],
+      "link_spGain": 10,
+      "link_allowed_types": [
+        "cold_attach",
+        "frozen",
+        "cold_burst"
+      ],
       "link_anomalies": [],
-      "ultimate_duration": 4,
-      "ultimate_cooldown": 20,
+      "ultimate_duration": 3,
       "ultimate_spCost": 80,
       "ultimate_spGain": 0,
-      "ultimate_allowed_types": [],
-      "ultimate_anomalies": []
+      "ultimate_allowed_types": [
+        "cold_attach",
+        "frozen",
+        "cold_burst"
+      ],
+      "ultimate_anomalies": [],
+      "ultimate_gaugeMax": 100,
+      "skill_spReply": 30,
+      "ultimate_spReply": 30,
+      "ultimate_gaugeReply": 0,
+      "skill_gaugeGain": 17,
+      "link_gaugeGain": 10,
+      "execution_duration": 3,
+      "execution_spGain": 20,
+      "execution_allowed_types": [
+        "default"
+      ],
+      "execution_anomalies": []
     },
     {
       "id": "ESTELLA",
@@ -213,7 +267,7 @@
       "attack_anomalies": [],
       "skill_duration": 2,
       "skill_cooldown": 0,
-      "skill_spCost": 25,
+      "skill_spCost": 100,
       "skill_spGain": 0,
       "skill_allowed_types": [
         "cold_attach",
@@ -255,7 +309,17 @@
       "ultimate_allowed_types": [
         "default"
       ],
-      "ultimate_anomalies": []
+      "ultimate_anomalies": [],
+      "ultimate_gaugeMax": 1000,
+      "skill_spReply": 0,
+      "ultimate_spReply": 0,
+      "ultimate_gaugeReply": 0,
+      "skill_gaugeGain": 0,
+      "link_gaugeGain": 0,
+      "execution_duration": 1.5,
+      "execution_spGain": 20,
+      "execution_allowed_types": [],
+      "execution_anomalies": []
     },
     {
       "id": "AKEKURI",
@@ -273,7 +337,7 @@
       "attack_anomalies": [],
       "skill_duration": 2,
       "skill_cooldown": 0,
-      "skill_spCost": 30,
+      "skill_spCost": 100,
       "skill_spGain": 0,
       "skill_allowed_types": [
         "blaze_burst",
@@ -302,7 +366,17 @@
       "ultimate_allowed_types": [
         "default"
       ],
-      "ultimate_anomalies": []
+      "ultimate_anomalies": [],
+      "ultimate_gaugeMax": 1000,
+      "skill_spReply": 0,
+      "ultimate_spReply": 0,
+      "ultimate_gaugeReply": 0,
+      "skill_gaugeGain": 0,
+      "link_gaugeGain": 0,
+      "execution_duration": 1.5,
+      "execution_spGain": 20,
+      "execution_allowed_types": [],
+      "execution_anomalies": []
     }
   ]
 }
