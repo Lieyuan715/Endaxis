@@ -476,7 +476,7 @@ onUnmounted(() => {
 .track-row { position: relative; flex: 1; min-height: 60px; display: flex; flex-direction: column; justify-content: center; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
 .track-lane { position: relative; height: 50px; width: 100%; display: flex; background: rgba(255, 255, 255, 0.02); border-top: 2px solid transparent; border-bottom: 2px solid transparent; }
 .track-row.is-active-drop .track-lane { border-top: 2px dashed #c0c0c0; border-bottom: 2px dashed #c0c0c0; z-index: 20; }
-.time-block { height: 100%; border-right: 1px solid rgba(255, 255, 255, 0.05); flex-shrink: 0; }
+.time-block { height: 100%; border-right: 1px solid rgba(255, 255, 255, 0.05); flex-shrink: 0; box-sizing: border-box; }
 .actions-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
 .connections-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 25; pointer-events: none; overflow: visible; }
 </style>

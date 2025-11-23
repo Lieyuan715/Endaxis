@@ -7,11 +7,12 @@ const uid = () => Math.random().toString(36).substring(2, 9)
 export const useTimelineStore = defineStore('timeline', () => {
 
     // ===================================================================================
-    // 1. 系统常量与配置 (Constants & Config)
+    // 1. 系统配置 (Configuration)
     // ===================================================================================
 
     const systemConstants = ref({
         maxSp: 300,
+        initialSp: 200, // 默认初始技力
         spRegenRate: 8,
         skillSpCostDefault: 100,
         maxStagger: 100
@@ -30,7 +31,6 @@ export const useTimelineStore = defineStore('timeline', () => {
         'break': '#ffffff', 'armor_break': '#f0f0f0', 'stagger': '#e6e6e6',
         'knockdown': '#d9d9d9', 'knockup': '#ffffff',
     }
-
     const getColor = (key) => ELEMENT_COLORS[key] || ELEMENT_COLORS.default
 
     // ===================================================================================
@@ -41,50 +41,46 @@ export const useTimelineStore = defineStore('timeline', () => {
     const characterRoster = ref([])
     const iconDatabase = ref({})
 
-    // 核心轨道数据
+    // 核心数据
     const tracks = ref([
         { id: null, actions: [], initialGauge: 0, maxGaugeOverride: null },
         { id: null, actions: [], initialGauge: 0, maxGaugeOverride: null },
         { id: null, actions: [], initialGauge: 0, maxGaugeOverride: null },
         { id: null, actions: [], initialGauge: 0, maxGaugeOverride: null },
     ])
-
-    // 连线数据
     const connections = ref([])
-
-    // 属性覆盖 (用于在排轴时临时修改技能属性，不影响全局gamedata)
     const characterOverrides = ref({})
 
     // ===================================================================================
-    // 3. 交互与视图状态 (Interaction & View State)
+    // 3. 交互状态 (UI State)
     // ===================================================================================
 
     const activeTrackId = ref(null)
     const timelineScrollLeft = ref(0)
     const zoomLevel = ref(1.0)
+    const showCursorGuide = ref(true)
+    const cursorCurrentTime = ref(0)
+
+    // 拖拽相关
     const globalDragOffset = ref(0)
     const draggingSkillData = ref(null)
 
-    // 选中状态
+    // 选中与多选
     const selectedActionId = ref(null)
     const selectedLibrarySkillId = ref(null)
-    const multiSelectedIds = ref(new Set()) // 多选集合
-
-    // 剪贴板
+    const multiSelectedIds = ref(new Set())
+    const isBoxSelectMode = ref(false)
     const clipboard = ref(null)
 
-    // 辅助功能开关
-    const showCursorGuide = ref(true)
-    const isBoxSelectMode = ref(false)
-    const cursorCurrentTime = ref(0) // 鼠标当前所在时间点
-
-    // 连线模式状态
+    // 连线相关
     const isLinking = ref(false)
     const linkingSourceId = ref(null)
     const linkingEffectIndex = ref(null)
 
+    const isActionSelected = (id) => selectedActionId.value === id || multiSelectedIds.value.has(id)
+
     // ===================================================================================
-    // 4. 历史记录系统 (Undo / Redo System)
+    // 4. 历史记录 (Undo/Redo)
     // ===================================================================================
 
     const historyStack = ref([])
@@ -92,22 +88,15 @@ export const useTimelineStore = defineStore('timeline', () => {
     const MAX_HISTORY = 50
 
     function commitState() {
-        // 1. 裁剪掉指针之后的“未来”记录
         if (historyIndex.value < historyStack.value.length - 1) {
             historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
         }
-
-        // 2. 创建快照 (深拷贝核心数据)
         const snapshot = JSON.stringify({
             tracks: tracks.value,
             connections: connections.value,
             characterOverrides: characterOverrides.value
         })
-
-        // 3. 入栈
         historyStack.value.push(snapshot)
-
-        // 4. 维护最大长度
         if (historyStack.value.length > MAX_HISTORY) {
             historyStack.value.shift()
         } else {
@@ -133,7 +122,7 @@ export const useTimelineStore = defineStore('timeline', () => {
         tracks.value = snapshot.tracks
         connections.value = snapshot.connections
         characterOverrides.value = snapshot.characterOverrides
-        clearSelection() // 恢复后清空选中，防止 ID 错乱
+        clearSelection()
     }
 
     // ===================================================================================
@@ -141,8 +130,6 @@ export const useTimelineStore = defineStore('timeline', () => {
     // ===================================================================================
 
     const timeBlockWidth = computed(() => BASE_BLOCK_WIDTH * zoomLevel.value)
-
-    const isActionSelected = (id) => selectedActionId.value === id || multiSelectedIds.value.has(id)
 
     const getActionPositionInfo = (instanceId) => {
         for (let i = 0; i < tracks.value.length; i++) {
@@ -166,7 +153,6 @@ export const useTimelineStore = defineStore('timeline', () => {
         return { ...track, ...(charInfo || { name: '未知', avatar: '', rarity: 0 }) }
     }))
 
-    // 动态生成技能库
     const activeSkillLibrary = computed(() => {
         const activeChar = characterRoster.value.find(c => c.id === activeTrackId.value)
         if (!activeChar) return []
@@ -177,23 +163,18 @@ export const useTimelineStore = defineStore('timeline', () => {
         const createBaseSkill = (suffix, type, name) => {
             const globalId = `${activeChar.id}_${suffix}`
             const globalOverride = characterOverrides.value[globalId] || {}
-
-            // 基础属性读取
             const rawDuration = activeChar[`${suffix}_duration`] || 1
             const rawCooldown = activeChar[`${suffix}_cooldown`] || 0
 
-            // 元素属性推导
             let derivedElement = activeChar.element || 'physical';
             if (activeChar[`${suffix}_element`]) derivedElement = activeChar[`${suffix}_element`];
             if (suffix === 'attack' || suffix === 'execution') derivedElement = 'physical';
             if (suffix === 'link') derivedElement = null;
 
-            // 默认值填充
-            let defaults = { spCost: 0, spGain: 0, gaugeCost: 0, gaugeGain: 0 , stagger: 0, teamGaugeGain: 0 }
+            let defaults = { spCost: 0, spGain: 0, gaugeCost: 0, gaugeGain: 0, stagger: 0, teamGaugeGain: 0 }
 
             if (suffix === 'attack') {
-                defaults.spGain = activeChar.attack_spGain || 0;
-                defaults.stagger = activeChar.attack_stagger || 0
+                defaults.spGain = activeChar.attack_spGain || 0; defaults.stagger = activeChar.attack_stagger || 0
             } else if (suffix === 'skill') {
                 defaults.spCost = activeChar.skill_spCost || systemConstants.value.skillSpCostDefault;
                 defaults.spGain = activeChar.skill_spGain || activeChar.skill_spReply || 0;
@@ -201,14 +182,9 @@ export const useTimelineStore = defineStore('timeline', () => {
                 defaults.teamGaugeGain = activeChar.skill_teamGaugeGain || 0;
                 defaults.stagger = activeChar.skill_stagger || 0
             } else if (suffix === 'link') {
-                defaults.spGain = activeChar.link_spGain || 0;
-                defaults.gaugeGain = activeChar.link_gaugeGain || 0;
-                defaults.stagger = activeChar.link_stagger || 0
+                defaults.spGain = activeChar.link_spGain || 0; defaults.gaugeGain = activeChar.link_gaugeGain || 0; defaults.stagger = activeChar.link_stagger || 0
             } else if (suffix === 'ultimate') {
-                defaults.gaugeCost = activeChar.ultimate_gaugeMax || 100;
-                defaults.spGain = activeChar.ultimate_spGain || activeChar.ultimate_spReply || 0;
-                defaults.gaugeGain = activeChar.ultimate_gaugeReply || 0;
-                defaults.stagger = activeChar.ultimate_stagger || 0
+                defaults.gaugeCost = activeChar.ultimate_gaugeMax || 100; defaults.spGain = activeChar.ultimate_spGain || activeChar.ultimate_spReply || 0; defaults.gaugeGain = activeChar.ultimate_gaugeReply || 0; defaults.stagger = activeChar.ultimate_stagger || 0
             } else if (suffix === 'execution') {
                 defaults.spGain = activeChar.execution_spGain || 0;
             }
@@ -233,24 +209,18 @@ export const useTimelineStore = defineStore('timeline', () => {
     })
 
     // ===================================================================================
-    // 6. 基础操作 Action (Basic Actions)
+    // 6. 基础操作 Actions (Basic Actions)
     // ===================================================================================
 
-    // 视图操作
     function setZoom(val) { if (val < 0.2) val = 0.2; if (val > 3.0) val = 3.0; zoomLevel.value = val }
     function setScrollLeft(val) { timelineScrollLeft.value = val }
     function setCursorTime(time) { cursorCurrentTime.value = Math.max(0, time) }
     function toggleCursorGuide() { showCursorGuide.value = !showCursorGuide.value }
-    function toggleBoxSelectMode() {
-        if (!isBoxSelectMode.value) isLinking.value = false
-        isBoxSelectMode.value = !isBoxSelectMode.value
-    }
+    function toggleBoxSelectMode() { if (!isBoxSelectMode.value) isLinking.value = false; isBoxSelectMode.value = !isBoxSelectMode.value }
 
-    // 拖拽辅助
     function setDraggingSkill(skill) { draggingSkillData.value = skill }
     function setDragOffset(offset) { globalDragOffset.value = offset }
 
-    // 选中操作
     function selectTrack(trackId) {
         activeTrackId.value = trackId
         selectedLibrarySkillId.value = null
@@ -272,8 +242,7 @@ export const useTimelineStore = defineStore('timeline', () => {
 
     function setMultiSelection(idsArray) {
         multiSelectedIds.value = new Set(idsArray)
-        if (idsArray.length === 1) { selectedActionId.value = idsArray[0] }
-        else { selectedActionId.value = null }
+        if (idsArray.length === 1) { selectedActionId.value = idsArray[0] } else { selectedActionId.value = null }
     }
 
     function clearSelection() {
@@ -282,23 +251,18 @@ export const useTimelineStore = defineStore('timeline', () => {
     }
 
     // ===================================================================================
-    // 7. 数据修改 Action (需 Undo 支持)
+    // 7. 数据修改 Actions (Recorded History)
     // ===================================================================================
-    // *以下所有修改数据的操作，都通过 commitState() 记录历史
 
-    // 添加动作
     function addSkillToTrack(trackId, skill, startTime) {
         const track = tracks.value.find(t => t.id === trackId); if (!track) return
-
         const clonedAnomalies = skill.physicalAnomaly ? JSON.parse(JSON.stringify(skill.physicalAnomaly)) : [];
         const newAction = { ...skill, instanceId: `inst_${uid()}`, physicalAnomaly: clonedAnomalies, startTime }
-
         track.actions.push(newAction);
         track.actions.sort((a, b) => a.startTime - b.startTime)
         commitState()
     }
 
-    // 移除单个动作
     function removeAction(instanceId) {
         if (!instanceId) return
         let deleted = false
@@ -314,7 +278,6 @@ export const useTimelineStore = defineStore('timeline', () => {
         }
     }
 
-    // 批量移除动作
     function removeCurrentSelection() {
         const targets = new Set(multiSelectedIds.value)
         if (selectedActionId.value) targets.add(selectedActionId.value)
@@ -324,22 +287,17 @@ export const useTimelineStore = defineStore('timeline', () => {
             if (!track.actions || track.actions.length === 0) return
             track.actions = track.actions.filter(a => !targets.has(a.instanceId))
         })
-
         connections.value = connections.value.filter(c => !targets.has(c.from) && !targets.has(c.to))
         clearSelection()
-
         commitState()
         return targets.size
     }
 
-    // 粘贴 (智能粘贴)
     function pasteSelection() {
         if (!clipboard.value) return
-
         const { actions, connections: clipConns, baseTime } = clipboard.value
         const idMap = new Map()
-
-        // 计算时间偏移：优先使用鼠标位置，否则默认+2s
+        // 智能计算偏移
         let timeDelta = (cursorCurrentTime.value >= 0) ? (cursorCurrentTime.value - baseTime) : 2.0
 
         actions.forEach(item => {
@@ -359,17 +317,14 @@ export const useTimelineStore = defineStore('timeline', () => {
                 connections.value.push({ ...conn, id: `conn_${uid()}`, from: newFrom, to: newTo })
             }
         })
-
         clearSelection()
         setMultiSelection(Array.from(idMap.values()))
         commitState()
     }
 
-    // 连线确认
     function confirmLinking(targetId, targetEffectIndex = null) {
         if (!isLinking.value || !linkingSourceId.value) return cancelLinking();
         if (linkingSourceId.value === targetId) { cancelLinking(); return; }
-
         const exists = connections.value.some(c => c.from === linkingSourceId.value && c.to === targetId && c.fromEffectIndex === linkingEffectIndex.value && c.toEffectIndex === targetEffectIndex)
         if (!exists) {
             connections.value.push({ id: `conn_${uid()}`, from: linkingSourceId.value, to: targetId, fromEffectIndex: linkingEffectIndex.value, toEffectIndex: targetEffectIndex })
@@ -383,7 +338,6 @@ export const useTimelineStore = defineStore('timeline', () => {
         commitState()
     }
 
-    // 属性修改
     function updateAction(instanceId, newProperties) {
         for (const track of tracks.value) {
             const action = track.actions.find(a => a.instanceId === instanceId);
@@ -401,7 +355,6 @@ export const useTimelineStore = defineStore('timeline', () => {
         commitState()
     }
 
-    // 轨道设置
     function changeTrackOperator(trackIndex, oldOperatorId, newOperatorId) {
         const track = tracks.value[trackIndex];
         if (track) {
@@ -416,17 +369,15 @@ export const useTimelineStore = defineStore('timeline', () => {
     function updateTrackInitialGauge(trackId, value) { const track = tracks.value.find(t => t.id === trackId); if (track) { track.initialGauge = value; commitState(); } }
 
     // ===================================================================================
-    // 8. 辅助逻辑 (Helpers: Copy, Link, Monitors)
+    // 8. 辅助逻辑 (Helpers)
     // ===================================================================================
 
     function copySelection() {
         const targetIds = new Set(multiSelectedIds.value)
         if (selectedActionId.value) targetIds.add(selectedActionId.value)
         if (targetIds.size === 0) return
-
         const copiedActions = []
         let minStartTime = Infinity
-
         tracks.value.forEach((track, trackIndex) => {
             track.actions.forEach(action => {
                 if (targetIds.has(action.instanceId)) {
@@ -444,47 +395,141 @@ export const useTimelineStore = defineStore('timeline', () => {
         if (isLinking.value && linkingSourceId.value === selectedActionId.value && linkingEffectIndex.value === effectIndex) { cancelLinking(); return; }
         isLinking.value = true; linkingSourceId.value = selectedActionId.value; linkingEffectIndex.value = effectIndex;
     }
-
     function cancelLinking() { isLinking.value = false; linkingSourceId.value = null; linkingEffectIndex.value = null; }
 
-    function calculateGlobalSpData() { /* (略，保持原样) */
-        // ... (这部分逻辑未变，省略以节省空间，但功能需保留)
-        const { maxSp, spRegenRate } = systemConstants.value;
+    function calculateGlobalStaggerData() {
+        const { maxStagger } = systemConstants.value;
         const events = []
         tracks.value.forEach(track => {
             if (!track.actions) return
             track.actions.forEach(action => {
-                if (action.spCost > 0) events.push({ time: action.startTime, change: -action.spCost, type: 'cost' })
-                if (action.spGain > 0) events.push({ time: action.startTime + action.duration, change: action.spGain, type: 'gain' })
+                if (action.stagger > 0) { events.push({ time: action.startTime + action.duration, change: action.stagger, type: 'gain' }) }
             })
         })
         events.sort((a, b) => a.time - b.time)
-        const points = []; let currentSp = 200; let currentTime = 0; points.push({ time: 0, sp: currentSp });
-        const advanceTime = (targetTime) => {
-            const timeDiff = targetTime - currentTime; if (timeDiff <= 0) return;
-            if (currentSp >= maxSp) { currentTime = targetTime; points.push({ time: currentTime, sp: maxSp }); return; }
-            const potentialGain = timeDiff * spRegenRate; const projectedSp = currentSp + potentialGain;
-            if (projectedSp >= maxSp) { const timeToMax = (maxSp - currentSp) / spRegenRate; points.push({ time: currentTime + timeToMax, sp: maxSp }); currentSp = maxSp; currentTime = targetTime; points.push({ time: currentTime, sp: maxSp }); }
-            else { currentSp = projectedSp; currentTime = targetTime; points.push({ time: currentTime, sp: currentSp }); }
-        }
-        events.forEach(ev => { advanceTime(ev.time); currentSp += ev.change; if (currentSp > maxSp) currentSp = maxSp; points.push({ time: currentTime, sp: currentSp, type: ev.type }) });
-        if (currentTime < TOTAL_DURATION) advanceTime(TOTAL_DURATION);
-        return points
-    }
-
-    function calculateGlobalStaggerData() { /* (略，保持原样) */
-        const { maxStagger } = systemConstants.value;
-        const events = []
-        tracks.value.forEach(track => { if (!track.actions) return; track.actions.forEach(action => { if (action.stagger > 0) { events.push({ time: action.startTime + action.duration, change: action.stagger, type: 'gain' }) } }) })
-        events.sort((a, b) => a.time - b.time)
         const points = []; const lockSegments = []; let currentVal = 0; let currentTime = 0; let lockedUntil = -1; points.push({ time: 0, val: 0 });
         const advanceTime = (targetTime) => { if (targetTime > currentTime) { points.push({ time: targetTime, val: currentVal }); currentTime = targetTime; } }
-        events.forEach(ev => { advanceTime(ev.time); if (currentTime >= lockedUntil) { currentVal += ev.change; if (currentVal >= maxStagger) { currentVal = 0; const endLock = currentTime + 10; lockedUntil = endLock; lockSegments.push({ start: currentTime, end: endLock }); points.push({ time: currentTime, val: 0 }); } } points.push({ time: currentTime, val: currentVal }) });
+        events.forEach(ev => {
+            advanceTime(ev.time);
+            if (currentTime >= lockedUntil) {
+                currentVal += ev.change;
+                if (currentVal >= maxStagger) { currentVal = 0; const endLock = currentTime + 10; lockedUntil = endLock; lockSegments.push({ start: currentTime, end: endLock }); points.push({ time: currentTime, val: 0 }); }
+            }
+            points.push({ time: currentTime, val: currentVal })
+        });
         if (currentTime < TOTAL_DURATION) advanceTime(TOTAL_DURATION);
         return { points, lockSegments }
     }
 
-    function calculateGaugeData(trackId) { /* (略，保持原样) */
+    function calculateGlobalSpData() {
+        const { maxSp, spRegenRate, initialSp } = systemConstants.value;
+        // 事件队列
+        const events = []
+        tracks.value.forEach(track => {
+            if (!track.actions) return
+            track.actions.forEach(action => {
+                // 1. 瞬间消耗 (Cost)
+                if (action.spCost > 0) {
+                    events.push({
+                        time: action.startTime,
+                        valChange: -action.spCost,
+                        type: 'cost'
+                    })
+                }
+                // 逻辑：在这段时间内，暂停自然回复
+                if (action.type === 'skill') {
+                    const castTime = 0.5;
+                    // 开始暂停回复
+                    events.push({
+                        time: action.startTime,
+                        lockChange: 1, // 锁计数 +1
+                        type: 'lock_start'
+                    })
+                    // 恢复回复
+                    events.push({
+                        time: action.startTime + castTime,
+                        lockChange: -1, // 锁计数 -1
+                        type: 'lock_end'
+                    })
+                }
+                // 3. 瞬间回复 (Gain)
+                if (action.spGain > 0) {
+                    events.push({
+                        time: action.startTime + action.duration,
+                        valChange: action.spGain,
+                        type: 'gain'
+                    })
+                }
+            })
+        })
+        // 按时间排序
+        events.sort((a, b) => a.time - b.time)
+        const points = [];
+        // 初始 SP
+        let currentSp = (initialSp !== undefined && initialSp !== null && initialSp !== "") ? Number(initialSp) : 200;
+        // 初始状态
+        let currentTime = 0;
+        let regenLockCount = 0; // 当前有多少个技能正在阻止回复
+        points.push({ time: 0, sp: currentSp });
+        // === 核心推进函数 ===
+        const advanceTime = (targetTime) => {
+            const timeDiff = targetTime - currentTime;
+            if (timeDiff <= 0) return;
+            // 关键修改：如果有锁，回复率为 0，否则为正常回复率
+            const effectiveRegenRate = regenLockCount > 0 ? 0 : spRegenRate;
+            if (currentSp >= maxSp && effectiveRegenRate > 0) {
+                // 已经满且还在回，直接平移
+                currentTime = targetTime;
+                points.push({ time: currentTime, sp: maxSp });
+                return;
+            }
+            const potentialGain = timeDiff * effectiveRegenRate;
+            const projectedSp = currentSp + potentialGain;
+
+            if (projectedSp >= maxSp) {
+                // 可能会在半路回满
+                const timeToMax = (maxSp - currentSp) / effectiveRegenRate;
+                points.push({ time: currentTime + timeToMax, sp: maxSp });
+                currentSp = maxSp;
+                currentTime = targetTime;
+                points.push({ time: currentTime, sp: maxSp });
+            } else {
+                // 没回满，正常增长（如果被锁了，potentialGain是0，这里就是画平线）
+                currentSp = projectedSp;
+                currentTime = targetTime;
+                points.push({ time: currentTime, sp: currentSp });
+            }
+        }
+
+        // === 遍历事件 ===
+        events.forEach(ev => {
+            // 1. 先把时间推移到事件发生的那一刻
+            advanceTime(ev.time);
+
+            // 2. 处理数值变化 (瞬间消耗/回复)
+            if (ev.valChange) {
+                currentSp += ev.valChange;
+                // 越界修正
+                if (currentSp > maxSp) currentSp = maxSp;
+                // 注意：这里不限制 <0，允许透支显示，交给UI去标红
+            }
+
+            // 3. 处理锁变化 (开始/结束暂停)
+            if (ev.lockChange) {
+                regenLockCount += ev.lockChange;
+            }
+
+            // 记录当前点
+            points.push({ time: currentTime, sp: currentSp, type: ev.type })
+        });
+
+        // 补齐到最后
+        if (currentTime < TOTAL_DURATION) advanceTime(TOTAL_DURATION);
+
+        return points
+    }
+
+    function calculateGaugeData(trackId) {
         const track = tracks.value.find(t => t.id === trackId); if (!track) return [];
         const charInfo = characterRoster.value.find(c => c.id === trackId); if (!charInfo) return [];
         const libId = `${trackId}_ultimate`; const override = characterOverrides.value[libId];
@@ -496,7 +541,7 @@ export const useTimelineStore = defineStore('timeline', () => {
         points.push({ time: TOTAL_DURATION, val: currentGauge, ratio: currentGauge / GAUGE_MAX }); return points;
     }
 
-    // === 外部 IO (IO & Lifecycle) ===
+    // === IO ===
     async function fetchGameData() {
         try {
             isLoading.value = true
@@ -511,7 +556,6 @@ export const useTimelineStore = defineStore('timeline', () => {
             const sortedRoster = data.characterRoster.sort((a, b) => (b.rarity || 0) - (a.rarity || 0));
             characterRoster.value = sortedRoster
             iconDatabase.value = data.ICON_DATABASE
-
             // 初始化快照
             historyStack.value = []
             historyIndex.value = -1
@@ -520,7 +564,6 @@ export const useTimelineStore = defineStore('timeline', () => {
     }
 
     function exportProject() { const projectData = { version: '2.0.0', timestamp: Date.now(), tracks: tracks.value, connections: connections.value, characterOverrides: characterOverrides.value }; const jsonString = JSON.stringify(projectData, null, 2); const blob = new Blob([jsonString], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `endaxis_project_${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(link.href) }
-
     async function importProject(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader(); reader.onload = (e) => {
@@ -534,23 +577,12 @@ export const useTimelineStore = defineStore('timeline', () => {
     }
 
     return {
-        // State
-        systemConstants, isLoading, characterRoster, iconDatabase, tracks, connections,
-        activeTrackId, timelineScrollLeft, zoomLevel, globalDragOffset, draggingSkillData,
-        selectedActionId, selectedLibrarySkillId, multiSelectedIds, clipboard,
-        isLinking, linkingSourceId, linkingEffectIndex,
-        showCursorGuide, isBoxSelectMode, cursorCurrentTime,
-        // Getters
-        teamTracksInfo, activeSkillLibrary, timeBlockWidth, ELEMENT_COLORS,
-        getActionPositionInfo, getIncomingConnections, getCharacterElementColor, isActionSelected,
-        // Actions
-        fetchGameData, exportProject, importProject, TOTAL_DURATION,
-        selectTrack, changeTrackOperator, selectLibrarySkill, updateLibrarySkill, selectAction, updateAction, removeAction,
-        addSkillToTrack, setDraggingSkill, setDragOffset, setScrollLeft, setZoom,
-        calculateGlobalSpData, calculateGaugeData, calculateGlobalStaggerData, updateTrackInitialGauge, updateTrackMaxGauge,
-        startLinking, confirmLinking, cancelLinking, removeConnection, getColor,
-        toggleCursorGuide, toggleBoxSelectMode, setCursorTime,
-        setMultiSelection, clearSelection, copySelection, pasteSelection, removeCurrentSelection,
-        undo, redo, commitState
+        systemConstants, isLoading, characterRoster, iconDatabase, tracks, connections, activeTrackId, timelineScrollLeft, zoomLevel, globalDragOffset, draggingSkillData,
+        selectedActionId, selectedLibrarySkillId, multiSelectedIds, clipboard, isLinking, linkingSourceId, linkingEffectIndex, showCursorGuide, isBoxSelectMode, cursorCurrentTime,
+        teamTracksInfo, activeSkillLibrary, timeBlockWidth, ELEMENT_COLORS, getActionPositionInfo, getIncomingConnections, getCharacterElementColor, isActionSelected,
+        fetchGameData, exportProject, importProject, TOTAL_DURATION, selectTrack, changeTrackOperator, selectLibrarySkill, updateLibrarySkill, selectAction, updateAction, removeAction,
+        addSkillToTrack, setDraggingSkill, setDragOffset, setScrollLeft, setZoom, calculateGlobalSpData, calculateGaugeData, calculateGlobalStaggerData, updateTrackInitialGauge, updateTrackMaxGauge,
+        startLinking, confirmLinking, cancelLinking, removeConnection, getColor, toggleCursorGuide, toggleBoxSelectMode, setCursorTime,
+        setMultiSelection, clearSelection, copySelection, pasteSelection, removeCurrentSelection, undo, redo, commitState
     }
 })

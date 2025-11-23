@@ -1,6 +1,6 @@
 <script setup>
-import {computed, watch, ref} from 'vue'
-import {useTimelineStore} from '../stores/timelineStore.js'
+import { computed, watch, ref } from 'vue'
+import { useTimelineStore } from '../stores/timelineStore.js'
 
 const store = useTimelineStore()
 const scrollContainer = ref(null)
@@ -14,7 +14,7 @@ const BASE_Y = SVG_HEIGHT - PADDING_BOTTOM
 const EFFECTIVE_HEIGHT = BASE_Y - PADDING_TOP
 const SCALE_Y = EFFECTIVE_HEIGHT / MAX_SP
 
-// 引用全局色：SP通常使用电磁黄，警告使用灼热红
+// 引用全局色
 const COLOR_SP_MAIN = store.ELEMENT_COLORS['emag'] || '#ffd700'
 const COLOR_WARNING = store.ELEMENT_COLORS['blaze'] || '#ff4d4f'
 
@@ -71,12 +71,24 @@ watch(
     <div class="monitor-sidebar">
       <div class="info-group">
         <div class="info-title">技力趋势模拟</div>
-        <div class="info-detail">初始: 200</div>
-        <div class="info-detail">回复: 8/s</div>
+
+        <div class="input-row">
+          <label>初始</label>
+          <input
+              type="number"
+              v-model.number="store.systemConstants.initialSp"
+              class="sp-input"
+              min="0"
+              max="300"
+          >
+        </div>
+
+        <div class="info-detail">回复: {{ store.systemConstants.spRegenRate }}/s</div>
       </div>
+
       <div class="legend-group">
         <div class="legend-item"><span class="dot sp-dot" :style="{background: COLOR_SP_MAIN}"></span>全队共享</div>
-        <div class="legend-item"><span class="line-mark max-mark"></span>上限(300)</div>
+        <div class="legend-item"><span class="line-mark max-mark"></span>上限({{ store.systemConstants.maxSp }})</div>
       </div>
     </div>
 
@@ -153,13 +165,13 @@ watch(
 }
 
 .monitor-sidebar {
-  background-color: #333;
+  background-color: #252525; /* 与 StaggerMonitor 一致 */
   border-right: 1px solid #444;
-  padding: 15px;
+  padding: 0 15px; /* 上下 padding 由 grid 居中控制 */
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   color: #ccc;
   font-size: 12px;
 }
@@ -167,18 +179,42 @@ watch(
 .info-title {
   font-weight: bold;
   color: #f0f0f0;
-  margin-bottom: 5px;
+  margin-bottom: 8px;
   font-size: 13px;
+}
+
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sp-input {
+  width: 50px;
+  background: #333;
+  border: 1px solid #555;
+  color: #fff;
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 12px;
+}
+
+.sp-input:focus {
+  outline: none;
+  border-color: #666;
+  background: #000;
 }
 
 .info-detail {
   color: #999;
+  margin-top: 2px;
+  font-size: 11px;
 }
 
 .legend-group {
-  margin-top: 5px;
-  border-top: 1px solid #555;
-  padding-top: 10px;
+  margin-top: 8px;
+  border-top: 1px dashed #444;
+  padding-top: 8px;
 }
 
 .legend-item {
