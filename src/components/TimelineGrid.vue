@@ -452,7 +452,7 @@ watch(() => store.timeBlockWidth, () => {
 })
 watch(() => [store.tracks, store.connections], () => {
   setTimeout(() => { forceSvgUpdate() }, 50)
-}, {deep: false})
+}, {deep: true})
 
 onMounted(() => {
   if (tracksContentRef.value) {
@@ -873,7 +873,7 @@ onUnmounted(() => {
   top: 4px;
   left: 0;
   width: 100%;
-  height: 50px; /* 留出底部给刻度 */
+  height: 50px;
   pointer-events: none;
   z-index: 10;
 }

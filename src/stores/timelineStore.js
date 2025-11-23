@@ -28,8 +28,8 @@ export const useTimelineStore = defineStore('timeline', () => {
         'cold_attach': '#00e5ff', 'cold_burst': '#40a9ff', 'frozen': '#1890ff', 'ice_shatter': '#bae7ff',
         'emag_attach': '#ffd700', 'emag_burst': '#fff566', 'conductive': '#ffec3d',
         'nature_attach': '#95de64', 'nature_burst': '#73d13d', 'corrosion': '#52c41a',
-        'break': '#ffffff', 'armor_break': '#f0f0f0', 'stagger': '#e6e6e6',
-        'knockdown': '#d9d9d9', 'knockup': '#ffffff',
+        'break': '#d9d9d9', 'armor_break': '#d9d9d9', 'stagger': '#d9d9d9',
+        'knockdown': '#d9d9d9', 'knockup': '#d9d9d9',
     }
     const getColor = (key) => ELEMENT_COLORS[key] || ELEMENT_COLORS.default
 
@@ -376,6 +376,57 @@ export const useTimelineStore = defineStore('timeline', () => {
     function updateTrackMaxGauge(trackId, value) { const track = tracks.value.find(t => t.id === trackId); if (track) { track.maxGaugeOverride = value; commitState(); } }
     function updateTrackInitialGauge(trackId, value) { const track = tracks.value.find(t => t.id === trackId); if (track) { track.initialGauge = value; commitState(); } }
 
+    function removeAnomaly(instanceId, rowIndex, colIndex) {
+        // 1. 找到动作实例
+        let action = null;
+        for (const track of tracks.value) {
+            const found = track.actions.find(a => a.instanceId === instanceId);
+            if (found) { action = found; break; }
+        }
+        if (!action) return;
+
+        const rows = action.physicalAnomaly || [];
+        if (!rows[rowIndex]) return;
+
+        // 2. 计算被删除图标的扁平索引 (Flat Index)
+        let flatIndex = 0;
+        for (let r = 0; r < rowIndex; r++) {
+            flatIndex += rows[r].length; // 累加前几行的长度
+        }
+        flatIndex += colIndex; // 加上当前行的列偏移
+
+        // 3. 先删除连在被删图标上的连线
+        connections.value = connections.value.filter(conn => {
+            // 如果连线是从这个图标出发的，删
+            const isSource = (conn.from === instanceId && conn.fromEffectIndex === flatIndex);
+            // 如果连线是连向这个图标的，删
+            const isTarget = (conn.to === instanceId && conn.toEffectIndex === flatIndex);
+            return !(isSource || isTarget);
+        });
+
+        // 4. 更新剩余连线的索引 (后续图标前移)
+        connections.value.forEach(conn => {
+            // 处理起点：如果在被删图标之后，索引减1
+            if (conn.from === instanceId && conn.fromEffectIndex !== null && conn.fromEffectIndex > flatIndex) {
+                conn.fromEffectIndex--;
+            }
+            // 处理终点：如果在被删图标之后，索引减1
+            if (conn.to === instanceId && conn.toEffectIndex !== null && conn.toEffectIndex > flatIndex) {
+                conn.toEffectIndex--;
+            }
+        });
+
+        // 5. 执行数据删除逻辑
+        rows[rowIndex].splice(colIndex, 1);
+        // 如果该行空了，删除整行
+        if (rows[rowIndex].length === 0) {
+            rows.splice(rowIndex, 1);
+        }
+
+        // 6. 提交状态
+        commitState();
+    }
+
     // ===================================================================================
     // 8. 辅助逻辑 (Helpers)
     // ===================================================================================
@@ -550,6 +601,7 @@ export const useTimelineStore = defineStore('timeline', () => {
         fetchGameData, exportProject, importProject, TOTAL_DURATION, selectTrack, changeTrackOperator, selectLibrarySkill, updateLibrarySkill, selectAction, updateAction, removeAction,
         addSkillToTrack, setDraggingSkill, setDragOffset, setScrollLeft, setZoom, calculateGlobalSpData, calculateGaugeData, calculateGlobalStaggerData, updateTrackInitialGauge, updateTrackMaxGauge,
         startLinking, confirmLinking, cancelLinking, removeConnection, getColor, toggleCursorGuide, toggleBoxSelectMode, setCursorTime,
-        setMultiSelection, clearSelection, copySelection, pasteSelection, removeCurrentSelection, undo, redo, commitState
+        setMultiSelection, clearSelection, copySelection, pasteSelection, removeCurrentSelection, undo, redo, commitState,
+        removeAnomaly
     }
 })

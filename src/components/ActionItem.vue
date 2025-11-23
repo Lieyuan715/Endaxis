@@ -12,28 +12,18 @@ const { iconDatabase } = storeToRefs(store)
 const isSelected = computed(() => store.isActionSelected(props.action.instanceId))
 
 // ===================================================================================
-// 1. 样式计算 (Style Logic)
+// 1. 基础样式与颜色计算 (Basic Styling)
 // ===================================================================================
 
-/**
- * 计算动作块的主题色
- * 优先级：自定义 > 特殊类型(Link/Exec) > 自身属性(Element) > 干员属性 > 默认
- */
+// 1.1 计算动作块主题色
 const themeColor = computed(() => {
-  // 1. 自定义覆盖
+  // 优先级：自定义 > 特殊类型 > 自身属性 > 干员属性 > 默认
   if (props.action.customColor) return props.action.customColor
-
-  // 2. 特殊类型优先
   if (props.action.type === 'link') return store.getColor('link')
   if (props.action.type === 'execution') return store.getColor('execution')
   if (props.action.type === 'attack') return store.getColor('physical')
+  if (props.action.element) return store.getColor(props.action.element)
 
-  // 3. 自身属性
-  if (props.action.element) {
-    return store.getColor(props.action.element)
-  }
-
-  // 4. 继承干员属性
   let charId = null
   for (const track of store.tracks) {
     if (track.actions.some(a => a.instanceId === props.action.instanceId)) {
@@ -42,14 +32,10 @@ const themeColor = computed(() => {
     }
   }
   if (charId) return store.getCharacterElementColor(charId)
-
-  // 5. 兜底
   return store.getColor('default')
 })
 
-/**
- * 主容器样式：位置、尺寸、玻璃拟态背景
- */
+// 1.2 主容器样式 (位置、尺寸、玻璃拟态)
 const style = computed(() => {
   const widthUnit = store.timeBlockWidth
   const left = (props.action.startTime || 0) * widthUnit
@@ -73,9 +59,7 @@ const style = computed(() => {
   }
 })
 
-/**
- * 冷却条样式 (底部细线)
- */
+// 1.3 冷却条样式 (底部细线)
 const cdStyle = computed(() => {
   const widthUnit = store.timeBlockWidth
   const cd = props.action.cooldown || 0
@@ -88,9 +72,7 @@ const cdStyle = computed(() => {
   }
 })
 
-/**
- * 触发窗口样式 (左侧高亮线)
- */
+// 1.4 触发窗口样式 (左侧线)
 const triggerWindowStyle = computed(() => {
   const widthUnit = store.timeBlockWidth
   const windowSize = props.action.triggerWindow || 0
@@ -102,27 +84,11 @@ const triggerWindowStyle = computed(() => {
   return {
     '--tw-width': `${width}px`,
     '--tw-color': color,
-    right: '100%' // 贴在左侧
+    right: 'calc(100% + 2px)' // 修正父元素边框偏移，紧贴左侧
   }
 })
 
-/**
- * 计算异常状态条的布局 (位置偏移)
- */
-function getAnomalyRowStyle(effect, index) {
-  const widthUnit = store.timeBlockWidth
-  const duration = effect.duration || 0
-  const bottomOffset = 100 + (index * 50)
-  return {
-    width: `calc(${duration * widthUnit}px + 21.5px)`,
-    bottom: `${bottomOffset}%`,
-    left: 'calc(100% - 20px)',
-    position: 'absolute',
-    marginBottom: '4px',
-    zIndex: 15 + index
-  }
-}
-
+// 1.5 辅助工具函数
 function getEffectColor(type) {
   return store.getColor(type)
 }
@@ -131,8 +97,8 @@ function getIconPath(type) {
   let charId = null
   for (const track of store.tracks) {
     if (track.actions.some(a => a.instanceId === props.action.instanceId)) {
-      charId = track.id
-      break
+      charId = track.id;
+      break;
     }
   }
   if (charId) {
@@ -142,25 +108,86 @@ function getIconPath(type) {
       if (exclusive?.path) return exclusive.path
     }
   }
-  return (iconDatabase.value && iconDatabase.value[type])
-      ? iconDatabase.value[type]
-      : (iconDatabase.value?.['default'] || '')
+  return store.iconDatabase[type] || store.iconDatabase['default'] || ''
 }
-
-// ===================================================================================
-// 2. 工具函数
-// ===================================================================================
 
 function hexToRgba(hex, alpha) {
   if (!hex) return `rgba(255,255,255,${alpha})`
-  let c = hex.substring(1).split('')
-  if (c.length === 3) c = [c[0], c[0], c[1], c[1], c[2], c[2]]
-  c = '0x' + c.join('')
+  let c = hex.substring(1).split('');
+  if (c.length === 3) c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+  c = '0x' + c.join('');
   return 'rgba(' + [(c >> 16) & 255, (c >> 8) & 255, c & 255].join(',') + ',' + alpha + ')'
 }
 
 // ===================================================================================
-// 3. 交互逻辑
+// 2. 核心渲染逻辑：二维布局计算 (2D Layout Calculation)
+// ===================================================================================
+
+const renderableAnomalies = computed(() => {
+  const raw = props.action.physicalAnomaly || []
+  if (raw.length === 0) return []
+
+  // 1. 数据标准化：确保是二维数组
+  const rows = Array.isArray(raw[0]) ? raw : [raw]
+
+  const widthUnit = store.timeBlockWidth
+  const ICON_SIZE = 20
+  const GAP = 2
+
+  const resultRows = []
+
+  // 2. 遍历计算布局
+  rows.forEach((row, rowIndex) => {
+    let currentLeft = 0 // 当前行的累积 X 偏移量
+
+    const processedRow = row.map((effect, colIndex) => {
+      const durationWidth = effect.duration > 0 ? (effect.duration * widthUnit) : 0
+
+      // 定义 CSS 中设置的 margin-left 大小
+      const BAR_MARGIN = 2
+
+      // 1. 基础宽度
+      let finalBarWidth = durationWidth
+
+      // 2. 逻辑修正：如果不是首个元素，减去图标宽
+      if (colIndex > 0 && finalBarWidth > 0) {
+        finalBarWidth = Math.max(0, finalBarWidth - ICON_SIZE)
+      }
+
+      // 3. 减去左侧间距 (margin-left)，防止右侧溢出
+      if (finalBarWidth > 0) {
+        finalBarWidth = Math.max(0, finalBarWidth - BAR_MARGIN)
+      }
+
+      const itemLayout = {
+        data: effect,
+        rowIndex,
+        colIndex,
+        style: {
+          left: `${currentLeft}px`,
+          bottom: `${100 + (rowIndex * 50)}%`,
+          position: 'absolute',
+          zIndex: 15 + rowIndex
+        },
+        barWidth: finalBarWidth
+      }
+
+      // 4. 更新下一个元素的起始位置
+      // 逻辑：当前位置 + 图标 + (间距+条子宽) + 元素间 GAP
+      const occupiedWidth = finalBarWidth > 0 ? (BAR_MARGIN + finalBarWidth) : 0
+      currentLeft += ICON_SIZE + occupiedWidth + GAP
+
+      return itemLayout
+    })
+    resultRows.push(processedRow)
+  })
+
+  // 3. 展平数组以便 v-for 渲染
+  return resultRows.flat()
+})
+
+// ===================================================================================
+// 3. 交互事件 (Interaction)
 // ===================================================================================
 
 function onDeleteClick() {
@@ -201,19 +228,24 @@ function onIconClick(evt, index) {
     </div>
 
     <div class="anomalies-overlay">
-      <div v-for="(effect, index) in action.physicalAnomaly" :key="index" class="anomaly-row" :style="getAnomalyRowStyle(effect, index)">
+      <div v-for="(item, index) in renderableAnomalies" :key="`${item.rowIndex}-${item.colIndex}`"
+           class="anomaly-wrapper"
+           :style="item.style">
 
-        <div class="anomaly-icon-box"
-             :id="`anomaly-${action.instanceId}-${index}`"
+        <div :id="`anomaly-${action.instanceId}-${index}`"
+             class="anomaly-icon-box"
              @mousedown.stop="onIconClick($event, index)"
              @click.stop>
-          <img :src="getIconPath(effect.type)" class="anomaly-icon"/>
-          <div v-if="effect.stacks > 1" class="anomaly-stacks">{{ effect.stacks }}</div>
+          <img :src="getIconPath(item.data.type)" class="anomaly-icon"/>
+          <div v-if="item.data.stacks > 1" class="anomaly-stacks">{{ item.data.stacks }}</div>
         </div>
-
-        <div class="anomaly-duration-bar" v-if="effect.duration > 0" :style="{ backgroundColor: getEffectColor(effect.type) }">
+        <div class="anomaly-duration-bar" v-if="item.data.duration > 0"
+             :style="{
+               width: `${item.barWidth}px`,
+               backgroundColor: getEffectColor(item.data.type)
+             }">
           <div class="striped-bg"></div>
-          <span class="duration-text">{{ effect.duration }}s</span>
+          <span class="duration-text">{{ item.data.duration }}s</span>
         </div>
 
       </div>
@@ -242,22 +274,23 @@ function onIconClick(evt, index) {
   z-index: 50 !important;
 }
 
-/* === 异常状态层 === */
+/* === 异常状态层 (Anomalies) === */
 .anomalies-overlay {
   position: absolute;
   top: 0;
-  left: 0;
-  width: 100%;
+  left: calc(100% - 20px);
+  width: 0;
   height: 100%;
   pointer-events: none;
   overflow: visible;
 }
 
-.anomaly-row {
+.anomaly-wrapper {
   display: flex;
   align-items: center;
   height: 22px;
   pointer-events: none;
+  white-space: nowrap;
 }
 
 /* 图标盒子 */
@@ -271,18 +304,17 @@ function onIconClick(evt, index) {
   align-items: center;
   justify-content: center;
   position: relative;
-  z-index: 100;
+  z-index: 10;
   flex-shrink: 0;
   pointer-events: auto;
   cursor: pointer;
   transition: transform 0.1s, border-color 0.1s;
-  margin-right: 3px;
 }
 
 .anomaly-icon-box:hover {
   border-color: #ffd700;
   transform: scale(1.2);
-  z-index: 101;
+  z-index: 20;
 }
 
 .anomaly-icon {
@@ -295,17 +327,16 @@ function onIconClick(evt, index) {
   position: absolute;
   bottom: -2px;
   right: -2px;
-  background-color: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.8);
   color: #ffd700;
   font-size: 8px;
   padding: 0 2px;
-  border-radius: 2px;
   line-height: 1;
+  border-radius: 2px;
 }
 
-/* 状态持续条 */
+/* 持续时间条 */
 .anomaly-duration-bar {
-  flex-grow: 1;
   height: 16px;
   border: none;
   border-radius: 2px;
@@ -316,6 +347,7 @@ function onIconClick(evt, index) {
   box-sizing: border-box;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   z-index: 1;
+  margin-left: 2px;
 }
 
 .striped-bg {
@@ -340,7 +372,7 @@ function onIconClick(evt, index) {
   font-family: sans-serif;
 }
 
-/* === 冷却条 (CD) === */
+/* === 冷却条 (CD Bar) === */
 .cd-bar-container {
   position: absolute;
   height: 4px;
@@ -373,6 +405,59 @@ function onIconClick(evt, index) {
   height: 8px;
 }
 
+/* === 触发窗口 (Trigger Window) === */
+.trigger-window-bar {
+  position: absolute;
+  /* 默认值消除 IDE 警告 */
+  --tw-width: 0px;
+  --tw-color: transparent;
+
+  width: var(--tw-width);
+  height: 4px;
+  bottom: -8px;
+  right: 100%;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  z-index: 5;
+  transform: translateY(-0.5px);
+}
+
+/* 亮线本体 */
+.trigger-window-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background-color: var(--tw-color);
+  opacity: 1;
+  border-radius: 2px 0 0 2px;
+}
+
+/* 右侧分割线 */
+.tw-separator {
+  position: absolute;
+  right: 0;
+  top: -2px;
+  width: 1px;
+  height: 8px;
+  background-color: var(--tw-color);
+  box-shadow: 0 0 4px var(--tw-color);
+  z-index: 6;
+}
+
+/* 左侧小球 */
+.tw-dot {
+  position: absolute;
+  left: -2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--tw-color);
+  z-index: 6;
+}
+
 /* === 删除按钮 === */
 .delete-btn-modern {
   position: absolute;
@@ -398,56 +483,5 @@ function onIconClick(evt, index) {
   border-color: #d32f2f;
   color: white;
   transform: scale(1.1);
-}
-
-/* === 触发窗口线 (Trigger Window) === */
-.trigger-window-bar {
-  position: absolute;
-  --tw-width: 0px;
-  --tw-color: transparent;
-
-  width: var(--tw-width);
-  height: 4px;
-  bottom: -8px;
-  right: 100%;
-  display: flex;
-  align-items: center;
-  pointer-events: none;
-  z-index: 5;
-  transform: translateY(0.5px);
-}
-
-/* 线条本体 */
-.trigger-window-bar::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background-color: var(--tw-color);
-  opacity: 1;
-  border-radius: 2px 0 0 2px;
-}
-
-/* 分割线 */
-.tw-separator {
-  position: absolute;
-  right: 0;
-  top: -2px;
-  width: 1px;
-  height: 8px;
-  background-color: var(--tw-color);
-  z-index: 6;
-}
-
-/* 左侧小球 */
-.tw-dot {
-  position: absolute;
-  left: -2px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background-color: var(--tw-color);
-  z-index: 6;
 }
 </style>

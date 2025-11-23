@@ -71,12 +71,10 @@ function updateCharId(event) {
 
 function addNewCharacter() {
   const newId = `char_${Date.now()}`
-
   const allGlobalEffects = [...effectKeys]
 
   const newChar = {
     id: newId, name: "新干员", rarity: 5, element: "physical", avatar: "/avatars/default.png", exclusive_buffs: [],
-
     attack_duration: 2.5, attack_spGain: 15, attack_stagger: 0, attack_allowed_types: allGlobalEffects, attack_anomalies: [],
     skill_duration: 2, skill_spCost: 100, skill_spGain: 0, skill_stagger: 0, skill_gaugeGain: 0, skill_teamGaugeGain: 6, skill_allowed_types: [], skill_anomalies: [],
     link_duration: 1.5, link_cooldown: 15, link_spGain: 0, link_stagger: 0, link_gaugeGain: 0, link_allowed_types: [], link_anomalies: [],
@@ -155,41 +153,67 @@ function saveData() {
 
 function getAvailableAnomalyOptions(skillType) {
   if (!selectedChar.value) return []
-
-  // 获取允许列表
   const allowedList = selectedChar.value[`${skillType}_allowed_types`] || []
-
-  // 映射为选项对象
   return allowedList.map(key => {
-    // 1. 全局状态
     if (EFFECT_NAMES[key]) {
       return { label: EFFECT_NAMES[key], value: key }
     }
-    // 2. 专属状态
     const exclusive = selectedChar.value.exclusive_buffs.find(b => b.key === key)
     if (exclusive) {
       return { label: `★ ${exclusive.name}`, value: key }
     }
-    // 3. 未知/兜底
     return { label: key, value: key }
   })
 }
 
-function addAnomaly(targetKey, skillType) {
-  // 1. 安全检查与初始化
-  if (!selectedChar.value) return
-  if (!selectedChar.value[targetKey]) {
-    selectedChar.value[targetKey] = []
+// === 5. 二维数组处理逻辑 (New 2D Logic) ===
+
+// 获取安全的二维数组数据 (兼容旧数据)
+function getAnomalyRows(char, skillType) {
+  if (!char) return []
+  const key = `${skillType}_anomalies`
+  const raw = char[key] || []
+  if (raw.length === 0) return []
+  // 如果第一项不是数组，说明是旧的一维数据，包一层变成 [[item]]
+  if (!Array.isArray(raw[0])) return [raw]
+  return raw
+}
+
+// 添加新行
+function addAnomalyRow(char, skillType) {
+  const key = `${skillType}_anomalies`
+  let rows = getAnomalyRows(char, skillType)
+  // 如果原本是空的或者被转换过，需要重新赋值回去确保是响应式的
+  if (!char[key] || (char[key].length > 0 && !Array.isArray(char[key][0]))) {
+    char[key] = rows
   }
 
-  const list = selectedChar.value[targetKey]
-
-  // 2. 计算默认类型
-  const allowedList = selectedChar.value[`${skillType}_allowed_types`] || []
+  const allowedList = char[`${skillType}_allowed_types`] || []
   const defaultType = allowedList.length > 0 ? allowedList[0] : 'default'
 
-  // 3. 推入新数据
-  list.push({ type: defaultType, stacks: 1, duration: 0 })
+  char[key].push([{ type: defaultType, stacks: 1, duration: 0 }])
+}
+
+// 在指定行添加效果
+function addAnomalyToRow(char, skillType, rowIndex) {
+  const rows = getAnomalyRows(char, skillType)
+  const allowedList = char[`${skillType}_allowed_types`] || []
+  const defaultType = allowedList.length > 0 ? allowedList[0] : 'default'
+
+  if (rows[rowIndex]) {
+    rows[rowIndex].push({ type: defaultType, stacks: 1, duration: 0 })
+  }
+}
+
+// 删除指定效果
+function removeAnomaly(char, skillType, rowIndex, colIndex) {
+  const rows = getAnomalyRows(char, skillType)
+  if (rows[rowIndex]) {
+    rows[rowIndex].splice(colIndex, 1)
+    if (rows[rowIndex].length === 0) {
+      rows.splice(rowIndex, 1)
+    }
+  }
 }
 </script>
 
@@ -288,22 +312,28 @@ function addAnomaly(targetKey, skillType) {
             </div>
 
             <div class="form-group" style="margin-top: 20px; border-top: 1px dashed #444; padding-top: 15px;">
-              <label>默认附带状态</label>
+              <label>默认附带状态 (二维布局)</label>
               <div class="info-banner" v-if="getAvailableAnomalyOptions('attack').length === 0">请先在上方勾选允许的状态。</div>
 
-              <div v-for="(item, idx) in selectedChar.attack_anomalies" :key="idx" class="exclusive-row">
-                <select v-model="item.type" class="flex-grow">
-                  <option v-for="opt in getAvailableAnomalyOptions('attack')" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                </select>
-                <input type="number" v-model.number="item.stacks" placeholder="层" style="width: 50px">
-                <input type="number" v-model.number="item.duration" placeholder="秒" step="0.1" style="width: 60px">
-                <button class="btn-icon" @click="selectedChar.attack_anomalies.splice(idx, 1)">×</button>
+              <div class="anomalies-grid-editor">
+                <div v-for="(row, rIndex) in getAnomalyRows(selectedChar, 'attack')" :key="rIndex" class="editor-row">
+                  <div v-for="(item, cIndex) in row" :key="cIndex" class="editor-card">
+                    <div class="card-header">
+                      <span class="card-label">#{{rIndex+1}}-{{cIndex+1}}</span>
+                      <button class="btn-icon-del" @click="removeAnomaly(selectedChar, 'attack', rIndex, cIndex)">×</button>
+                    </div>
+                    <select v-model="item.type" class="card-input">
+                      <option v-for="opt in getAvailableAnomalyOptions('attack')" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                    </select>
+                    <div class="card-row">
+                      <input type="number" v-model.number="item.stacks" placeholder="层" class="mini-input"><span class="unit">层</span>
+                      <input type="number" v-model.number="item.duration" placeholder="秒" step="0.5" class="mini-input"><span class="unit">s</span>
+                    </div>
+                  </div>
+                  <button class="btn-add-col" @click="addAnomalyToRow(selectedChar, 'attack', rIndex)" title="在此行添加">+</button>
+                </div>
+                <button class="btn-add-row" @click="addAnomalyRow(selectedChar, 'attack')" :disabled="getAvailableAnomalyOptions('attack').length === 0">+ 添加新行</button>
               </div>
-              <button class="btn-small"
-                      @click="addAnomaly('attack_anomalies', 'attack')"
-                      :disabled="getAvailableAnomalyOptions('attack').length === 0">
-                + 添加默认状态
-              </button>
             </div>
           </div>
 
@@ -317,11 +347,7 @@ function addAnomaly(targetKey, skillType) {
               <div class="form-group"><label>技力回复</label><input type="number" v-model.number="selectedChar.skill_spGain"></div>
               <div class="form-group"><label>失衡值</label><input type="number" v-model.number="selectedChar.skill_stagger"></div>
               <div class="form-group"><label>自身充能</label><input type="number" v-model.number="selectedChar.skill_gaugeGain"></div>
-
-              <div class="form-group">
-                <label>队友充能</label>
-                <input type="number" v-model.number="selectedChar.skill_teamGaugeGain">
-              </div>
+              <div class="form-group"><label>队友充能</label><input type="number" v-model.number="selectedChar.skill_teamGaugeGain"></div>
             </div>
 
             <div class="form-group"><label>允许挂载的状态</label>
@@ -332,22 +358,19 @@ function addAnomaly(targetKey, skillType) {
             </div>
 
             <div class="form-group" style="margin-top: 20px; border-top: 1px dashed #444; padding-top: 15px;">
-              <label>默认附带状态 (Auto Anomalies)</label>
+              <label>默认附带状态 (二维布局)</label>
               <div class="info-banner" v-if="getAvailableAnomalyOptions('skill').length === 0">请先在上方勾选允许的状态。</div>
-
-              <div v-for="(item, idx) in selectedChar.skill_anomalies" :key="idx" class="exclusive-row">
-                <select v-model="item.type" class="flex-grow">
-                  <option v-for="opt in getAvailableAnomalyOptions('skill')" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                </select>
-                <input type="number" v-model.number="item.stacks" placeholder="层" style="width: 50px">
-                <input type="number" v-model.number="item.duration" placeholder="秒" step="0.1" style="width: 60px">
-                <button class="btn-icon" @click="selectedChar.skill_anomalies.splice(idx, 1)">×</button>
+              <div class="anomalies-grid-editor">
+                <div v-for="(row, rIndex) in getAnomalyRows(selectedChar, 'skill')" :key="rIndex" class="editor-row">
+                  <div v-for="(item, cIndex) in row" :key="cIndex" class="editor-card">
+                    <div class="card-header"><span class="card-label">#{{rIndex+1}}-{{cIndex+1}}</span><button class="btn-icon-del" @click="removeAnomaly(selectedChar, 'skill', rIndex, cIndex)">×</button></div>
+                    <select v-model="item.type" class="card-input"><option v-for="opt in getAvailableAnomalyOptions('skill')" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select>
+                    <div class="card-row"><input type="number" v-model.number="item.stacks" class="mini-input"><span class="unit">层</span><input type="number" v-model.number="item.duration" step="0.5" class="mini-input"><span class="unit">s</span></div>
+                  </div>
+                  <button class="btn-add-col" @click="addAnomalyToRow(selectedChar, 'skill', rIndex)">+</button>
+                </div>
+                <button class="btn-add-row" @click="addAnomalyRow(selectedChar, 'skill')" :disabled="getAvailableAnomalyOptions('skill').length === 0">+ 添加新行</button>
               </div>
-              <button class="btn-small"
-                      @click="addAnomaly('skill_anomalies', 'skill')"
-                      :disabled="getAvailableAnomalyOptions('skill').length === 0">
-                + 添加默认状态
-              </button>
             </div>
           </div>
 
@@ -368,21 +391,19 @@ function addAnomaly(targetKey, skillType) {
             </div>
 
             <div class="form-group" style="margin-top: 20px; border-top: 1px dashed #444; padding-top: 15px;">
-              <label>默认附带状态 (Auto Anomalies)</label>
+              <label>默认附带状态 (二维布局)</label>
               <div class="info-banner" v-if="getAvailableAnomalyOptions('link').length === 0">请先在上方勾选允许的状态。</div>
-              <div v-for="(item, idx) in selectedChar.link_anomalies" :key="idx" class="exclusive-row">
-                <select v-model="item.type" class="flex-grow">
-                  <option v-for="opt in getAvailableAnomalyOptions('link')" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                </select>
-                <input type="number" v-model.number="item.stacks" placeholder="层" style="width: 50px">
-                <input type="number" v-model.number="item.duration" placeholder="秒" step="0.1" style="width: 60px">
-                <button class="btn-icon" @click="selectedChar.link_anomalies.splice(idx, 1)">×</button>
+              <div class="anomalies-grid-editor">
+                <div v-for="(row, rIndex) in getAnomalyRows(selectedChar, 'link')" :key="rIndex" class="editor-row">
+                  <div v-for="(item, cIndex) in row" :key="cIndex" class="editor-card">
+                    <div class="card-header"><span class="card-label">#{{rIndex+1}}-{{cIndex+1}}</span><button class="btn-icon-del" @click="removeAnomaly(selectedChar, 'link', rIndex, cIndex)">×</button></div>
+                    <select v-model="item.type" class="card-input"><option v-for="opt in getAvailableAnomalyOptions('link')" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select>
+                    <div class="card-row"><input type="number" v-model.number="item.stacks" class="mini-input"><span class="unit">层</span><input type="number" v-model.number="item.duration" step="0.5" class="mini-input"><span class="unit">s</span></div>
+                  </div>
+                  <button class="btn-add-col" @click="addAnomalyToRow(selectedChar, 'link', rIndex)">+</button>
+                </div>
+                <button class="btn-add-row" @click="addAnomalyRow(selectedChar, 'link')" :disabled="getAvailableAnomalyOptions('link').length === 0">+ 添加新行</button>
               </div>
-              <button class="btn-small"
-                      @click="addAnomaly('link_anomalies', 'link')"
-                      :disabled="getAvailableAnomalyOptions('link').length === 0">
-                + 添加默认状态
-              </button>
             </div>
           </div>
 
@@ -392,11 +413,9 @@ function addAnomaly(targetKey, skillType) {
                 <select v-model="selectedChar.ultimate_element"><option :value="undefined">跟随干员</option><option v-for="elm in ELEMENTS" :key="elm.value" :value="elm.value">{{ elm.label }}</option></select>
               </div>
               <div class="form-group"><label>持续时间</label><input type="number" step="0.1" v-model.number="selectedChar.ultimate_duration"></div>
-
               <div class="form-group"><label>技力回复</label><input type="number" v-model.number="selectedChar.ultimate_spGain"></div>
               <div class="form-group"><label>失衡值</label><input type="number" v-model.number="selectedChar.ultimate_stagger"></div>
               <div class="form-group"><label>充能消耗</label><input type="number" v-model.number="selectedChar.ultimate_gaugeMax"></div>
-
               <div class="form-group"><label>自身充能</label><input type="number" v-model.number="selectedChar.ultimate_gaugeReply"></div>
             </div>
 
@@ -408,21 +427,19 @@ function addAnomaly(targetKey, skillType) {
             </div>
 
             <div class="form-group" style="margin-top: 20px; border-top: 1px dashed #444; padding-top: 15px;">
-              <label>默认附带状态 (Auto Anomalies)</label>
+              <label>默认附带状态 (二维布局)</label>
               <div class="info-banner" v-if="getAvailableAnomalyOptions('ultimate').length === 0">请先在上方勾选允许的状态。</div>
-              <div v-for="(item, idx) in selectedChar.ultimate_anomalies" :key="idx" class="exclusive-row">
-                <select v-model="item.type" class="flex-grow">
-                  <option v-for="opt in getAvailableAnomalyOptions('ultimate')" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                </select>
-                <input type="number" v-model.number="item.stacks" placeholder="层" style="width: 50px">
-                <input type="number" v-model.number="item.duration" placeholder="秒" step="0.1" style="width: 60px">
-                <button class="btn-icon" @click="selectedChar.ultimate_anomalies.splice(idx, 1)">×</button>
+              <div class="anomalies-grid-editor">
+                <div v-for="(row, rIndex) in getAnomalyRows(selectedChar, 'ultimate')" :key="rIndex" class="editor-row">
+                  <div v-for="(item, cIndex) in row" :key="cIndex" class="editor-card">
+                    <div class="card-header"><span class="card-label">#{{rIndex+1}}-{{cIndex+1}}</span><button class="btn-icon-del" @click="removeAnomaly(selectedChar, 'ultimate', rIndex, cIndex)">×</button></div>
+                    <select v-model="item.type" class="card-input"><option v-for="opt in getAvailableAnomalyOptions('ultimate')" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select>
+                    <div class="card-row"><input type="number" v-model.number="item.stacks" class="mini-input"><span class="unit">层</span><input type="number" v-model.number="item.duration" step="0.5" class="mini-input"><span class="unit">s</span></div>
+                  </div>
+                  <button class="btn-add-col" @click="addAnomalyToRow(selectedChar, 'ultimate', rIndex)">+</button>
+                </div>
+                <button class="btn-add-row" @click="addAnomalyRow(selectedChar, 'ultimate')" :disabled="getAvailableAnomalyOptions('ultimate').length === 0">+ 添加新行</button>
               </div>
-              <button class="btn-small"
-                      @click="addAnomaly('ultimate_anomalies', 'ultimate')"
-                      :disabled="getAvailableAnomalyOptions('ultimate').length === 0">
-                + 添加默认状态
-              </button>
             </div>
           </div>
 
@@ -434,36 +451,26 @@ function addAnomaly(targetKey, skillType) {
 
             <div class="form-group"><label>允许挂载的状态</label>
               <div class="checkbox-grid">
-                <label v-for="key in effectKeys" :key="`execution_${key}`" class="cb-item">
-                  <input type="checkbox" :value="key" v-model="selectedChar.execution_allowed_types" @change="onCheckChange(selectedChar, 'execution', key)">
-                  {{ EFFECT_NAMES[key] }}
-                </label>
-                <label v-for="buff in selectedChar.exclusive_buffs" :key="`execution_${buff.key}`" class="cb-item exclusive">
-                  <input type="checkbox" :value="buff.key" v-model="selectedChar.execution_allowed_types">
-                  ★ {{ buff.name }}
-                </label>
+                <label v-for="key in effectKeys" :key="`execution_${key}`" class="cb-item"><input type="checkbox" :value="key" v-model="selectedChar.execution_allowed_types" @change="onCheckChange(selectedChar, 'execution', key)">{{ EFFECT_NAMES[key] }}</label>
+                <label v-for="buff in selectedChar.exclusive_buffs" :key="`execution_${buff.key}`" class="cb-item exclusive"><input type="checkbox" :value="buff.key" v-model="selectedChar.execution_allowed_types">★ {{ buff.name }}</label>
               </div>
             </div>
 
             <div class="form-group" style="margin-top: 20px; border-top: 1px dashed #444; padding-top: 15px;">
-              <label>默认附带状态 (Auto Anomalies)</label>
+              <label>默认附带状态 (二维布局)</label>
               <div class="info-banner" v-if="getAvailableAnomalyOptions('execution').length === 0">请先在上方勾选允许的状态。</div>
-
-              <div v-for="(item, idx) in selectedChar.execution_anomalies" :key="idx" class="exclusive-row">
-                <select v-model="item.type" class="flex-grow">
-                  <option v-for="opt in getAvailableAnomalyOptions('execution')" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                </select>
-                <input type="number" v-model.number="item.stacks" placeholder="层" style="width: 50px">
-                <input type="number" v-model.number="item.duration" placeholder="秒" step="0.1" style="width: 60px">
-                <button class="btn-icon" @click="selectedChar.execution_anomalies.splice(idx, 1)">×</button>
+              <div class="anomalies-grid-editor">
+                <div v-for="(row, rIndex) in getAnomalyRows(selectedChar, 'execution')" :key="rIndex" class="editor-row">
+                  <div v-for="(item, cIndex) in row" :key="cIndex" class="editor-card">
+                    <div class="card-header"><span class="card-label">#{{rIndex+1}}-{{cIndex+1}}</span><button class="btn-icon-del" @click="removeAnomaly(selectedChar, 'execution', rIndex, cIndex)">×</button></div>
+                    <select v-model="item.type" class="card-input"><option v-for="opt in getAvailableAnomalyOptions('execution')" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select>
+                    <div class="card-row"><input type="number" v-model.number="item.stacks" class="mini-input"><span class="unit">层</span><input type="number" v-model.number="item.duration" step="0.5" class="mini-input"><span class="unit">s</span></div>
+                  </div>
+                  <button class="btn-add-col" @click="addAnomalyToRow(selectedChar, 'execution', rIndex)">+</button>
+                </div>
+                <button class="btn-add-row" @click="addAnomalyRow(selectedChar, 'execution')" :disabled="getAvailableAnomalyOptions('execution').length === 0">+ 添加新行</button>
               </div>
-              <button class="btn-small"
-                      @click="addAnomaly('execution_anomalies', 'execution')"
-                      :disabled="getAvailableAnomalyOptions('execution').length === 0">
-                + 添加默认状态
-              </button>
             </div>
-
           </div>
 
         </div>
@@ -526,5 +533,23 @@ function addAnomaly(targetKey, skillType) {
 .cb-item.exclusive { color: #ffd700; }
 .info-banner { background: rgba(255, 255, 255, 0.05); padding: 10px; border-left: 3px solid #888; color: #ccc; margin-bottom: 20px; font-size: 13px; }
 .empty-state { display: flex; justify-content: center; align-items: center; height: 300px; color: #666; }
+
+/* 二维编辑器样式 */
+.anomalies-grid-editor { display: flex; flex-direction: column; gap: 8px; background: #222; padding: 10px; border-radius: 6px; border: 1px solid #444; }
+.editor-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; background: #2a2a2a; padding: 8px; border-radius: 4px; border-left: 3px solid #666; }
+.editor-card { background: #333; border: 1px solid #555; border-radius: 4px; padding: 6px; width: 140px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
+.card-label { font-size: 10px; color: #888; }
+.card-input { width: 100%; background: #222; border: 1px solid #444; color: #eee; font-size: 12px; padding: 2px; border-radius: 2px; }
+.card-row { display: flex; align-items: center; gap: 4px; }
+.mini-input { width: 40px !important; padding: 2px 4px !important; text-align: center; font-size: 12px; }
+.unit { font-size: 10px; color: #666; }
+.btn-icon-del { background: none; border: none; color: #666; cursor: pointer; font-size: 16px; line-height: 1; padding: 0; }
+.btn-icon-del:hover { color: #d32f2f; }
+.btn-add-col { width: 60px; height: 100%; min-height: 60px; background: #333; border: 1px dashed #555; color: #aaa; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.btn-add-col:hover { border-color: #ffd700; color: #ffd700; }
+.btn-add-row { width: 100%; padding: 8px; background: #333; border: 1px dashed #666; color: #aaa; border-radius: 4px; cursor: pointer; }
+.btn-add-row:hover { border-color: #ffd700; color: #ffd700; background: #3a3a3a; }
+
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 </style>

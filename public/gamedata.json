@@ -62,7 +62,15 @@
         "blaze_attach",
         "default"
       ],
-      "attack_anomalies": [],
+      "attack_anomalies": [
+        [
+          {
+            "type": "break",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
+      ],
       "skill_duration": 2,
       "skill_spCost": 100,
       "skill_gaugeGain": 0,
@@ -72,11 +80,25 @@
         "ice_shatter"
       ],
       "skill_anomalies": [
-        {
-          "type": "stagger",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "stagger",
+            "stacks": 1,
+            "duration": 0
+          },
+          {
+            "type": "stagger",
+            "stacks": 1,
+            "duration": 0
+          }
+        ],
+        [
+          {
+            "type": "stagger",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "link_duration": 1.5,
       "link_cooldown": 15,
@@ -86,11 +108,13 @@
         "crystallization"
       ],
       "link_anomalies": [
-        {
-          "type": "crystallization",
-          "stacks": 1,
-          "duration": 4
-        }
+        [
+          {
+            "type": "crystallization",
+            "stacks": 1,
+            "duration": 4
+          }
+        ]
       ],
       "ultimate_duration": 3,
       "ultimate_gaugeMax": 100,
@@ -168,11 +192,13 @@
         "ice_shatter"
       ],
       "skill_anomalies": [
-        {
-          "type": "armor_break",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "armor_break",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "link_duration": 1.5,
       "link_cooldown": 15,
@@ -267,16 +293,18 @@
         "magic_weakness"
       ],
       "skill_anomalies": [
-        {
-          "type": "physical_weakness",
-          "stacks": 1,
-          "duration": 0
-        },
-        {
-          "type": "magic_weakness",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "physical_weakness",
+            "stacks": 1,
+            "duration": 0
+          },
+          {
+            "type": "magic_weakness",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "link_duration": 1.5,
       "link_cooldown": 15,
@@ -288,11 +316,13 @@
         "nature_burst"
       ],
       "link_anomalies": [
-        {
-          "type": "corrosion",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "corrosion",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "ultimate_duration": 3,
       "ultimate_gaugeMax": 100,
@@ -373,11 +403,13 @@
         "cold_enchantment"
       ],
       "skill_anomalies": [
-        {
-          "type": "cold_enchantment",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "cold_enchantment",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "link_duration": 1.5,
       "link_cooldown": 15,
@@ -497,16 +529,18 @@
         "ice_shatter"
       ],
       "ultimate_anomalies": [
-        {
-          "type": "slow",
-          "stacks": 1,
-          "duration": 0
-        },
-        {
-          "type": "magic_weakness",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "slow",
+            "stacks": 1,
+            "duration": 0
+          },
+          {
+            "type": "magic_weakness",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "execution_duration": 1.5,
       "execution_spGain": 20,
@@ -575,11 +609,13 @@
         "cold_burst"
       ],
       "skill_anomalies": [
-        {
-          "type": "cold_attach",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "cold_attach",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "link_duration": 1.5,
       "link_cooldown": 15,
@@ -591,11 +627,13 @@
         "cold_attach"
       ],
       "link_anomalies": [
-        {
-          "type": "cold_attach",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "cold_attach",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "ultimate_duration": 3,
       "ultimate_gaugeMax": 100,
@@ -607,11 +645,13 @@
         "cold_burst"
       ],
       "ultimate_anomalies": [
-        {
-          "type": "cold_attach",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "cold_attach",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "execution_duration": 1.5,
       "execution_spGain": 20,
@@ -676,11 +716,13 @@
         "magma"
       ],
       "attack_anomalies": [
-        {
-          "type": "magma",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "magma",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "skill_duration": 2,
       "skill_spCost": 100,
@@ -694,11 +736,13 @@
         "blaze_burst"
       ],
       "skill_anomalies": [
-        {
-          "type": "magma",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "magma",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "link_duration": 1.5,
       "link_cooldown": 15,
@@ -708,11 +752,13 @@
         "magma"
       ],
       "link_anomalies": [
-        {
-          "type": "magma",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "magma",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "ultimate_duration": 3,
       "ultimate_gaugeMax": 100,
@@ -750,11 +796,13 @@
         "armor_break"
       ],
       "execution_anomalies": [
-        {
-          "type": "magma",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "magma",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ]
     },
     {
@@ -811,11 +859,13 @@
         "physical_weakness"
       ],
       "skill_anomalies": [
-        {
-          "type": "knockdown",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "knockdown",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "link_duration": 1.5,
       "link_cooldown": 15,
@@ -825,11 +875,13 @@
         "combo"
       ],
       "link_anomalies": [
-        {
-          "type": "combo",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "combo",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "ultimate_duration": 3,
       "ultimate_gaugeMax": 100,
@@ -841,11 +893,13 @@
         "ice_shatter"
       ],
       "ultimate_anomalies": [
-        {
-          "type": "knockdown",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "knockdown",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "execution_duration": 1.5,
       "execution_spGain": 20,
@@ -914,11 +968,13 @@
         "ice_shatter"
       ],
       "skill_anomalies": [
-        {
-          "type": "knockdown",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "knockdown",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "link_duration": 1.5,
       "link_cooldown": 15,
@@ -930,11 +986,13 @@
         "ice_shatter"
       ],
       "link_anomalies": [
-        {
-          "type": "knockdown",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "knockdown",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "ultimate_duration": 3,
       "ultimate_gaugeMax": 100,
@@ -1009,11 +1067,13 @@
         "ice_shatter"
       ],
       "skill_anomalies": [
-        {
-          "type": "knockup",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "knockup",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "link_duration": 1.5,
       "link_cooldown": 15,
@@ -1025,11 +1085,13 @@
         "ice_shatter"
       ],
       "link_anomalies": [
-        {
-          "type": "knockup",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "knockup",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "ultimate_duration": 3,
       "ultimate_gaugeMax": 100,
@@ -1089,11 +1151,13 @@
         "cold_burst"
       ],
       "skill_anomalies": [
-        {
-          "type": "frozen",
-          "stacks": 1,
-          "duration": 5
-        }
+        [
+          {
+            "type": "frozen",
+            "stacks": 1,
+            "duration": 5
+          }
+        ]
       ],
       "link_duration": 1,
       "link_cooldown": 5,
@@ -1112,11 +1176,13 @@
         "cold_attach"
       ],
       "ultimate_anomalies": [
-        {
-          "type": "cold_burst",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "cold_attach",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "execution_duration": 1.5,
       "execution_spGain": 20,
@@ -1168,11 +1234,13 @@
         "cold_attach"
       ],
       "skill_anomalies": [
-        {
-          "type": "cold_attach",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "cold_attach",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "link_duration": 1.5,
       "link_cooldown": 15,
@@ -1184,16 +1252,18 @@
         "ice_shatter"
       ],
       "link_anomalies": [
-        {
-          "type": "knockup",
-          "stacks": 1,
-          "duration": 0
-        },
-        {
-          "type": "ice_shatter",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "knockup",
+            "stacks": 1,
+            "duration": 0
+          },
+          {
+            "type": "ice_shatter",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "ultimate_duration": 3,
       "ultimate_gaugeMax": 100,
@@ -1252,11 +1322,13 @@
         "blaze_burst"
       ],
       "skill_anomalies": [
-        {
-          "type": "blaze_attach",
-          "stacks": 1,
-          "duration": 0
-        }
+        [
+          {
+            "type": "blaze_attach",
+            "stacks": 1,
+            "duration": 0
+          }
+        ]
       ],
       "link_duration": 1.5,
       "link_cooldown": 15,
