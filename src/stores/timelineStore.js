@@ -187,6 +187,7 @@ export const useTimelineStore = defineStore('timeline', () => {
                 defaults.spGain = activeChar.link_spGain || 0
                 defaults.gaugeGain = activeChar.link_gaugeGain || 0
                 defaults.stagger = activeChar.link_stagger || 0
+                defaults.triggerWindow = 0
             } else if (suffix === 'ultimate') {
                 defaults.gaugeCost = activeChar.ultimate_gaugeMax || 100
                 defaults.spGain = activeChar.ultimate_spGain || activeChar.ultimate_spReply || 0

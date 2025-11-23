@@ -436,7 +436,7 @@ function onBackgroundClick(event) {
 function handleKeyDown(event) {
   const hasSelection = store.selectedActionId || store.multiSelectedIds.size > 0
   if (!hasSelection) return
-  if (event.key === 'Delete' || event.key === 'Backspace') {
+  if (event.key === 'Delete') {
     event.preventDefault()
     const count = store.removeCurrentSelection()
     if (count > 0) ElMessage.success(`已删除 ${count} 个动作`)

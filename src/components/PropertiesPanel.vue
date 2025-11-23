@@ -258,6 +258,14 @@ function removeEffect(index) {
         <input type="number" :value="selectedAction.cooldown" @input="e => updateActionProp('cooldown', Number(e.target.value))">
       </div>
 
+      <div class="form-group highlight" v-if="currentSkillType === 'link'">
+        <label>触发窗口（仅为展示连携窗口）</label>
+        <input type="number"
+               :value="selectedAction.triggerWindow || 0"
+               @input="e => updateActionProp('triggerWindow', Number(e.target.value))"
+               step="0.1" min="0">
+      </div>
+
       <div class="form-group highlight" v-if="currentSkillType === 'skill'">
         <label>技力消耗</label>
         <input type="number" :value="selectedAction.spCost" @input="e => updateActionProp('spCost', Number(e.target.value))">

@@ -11,49 +11,29 @@ const props = defineProps({
 const store = useTimelineStore()
 const gradientId = computed(() => `grad-${props.connection.id}`)
 
-// === 1. 颜色解析逻辑 ===
-/**
- * 解析颜色
- * @param {Object} info - 由 getActionPositionInfo 返回的对象 { action, trackIndex }
- * @param {Number|null} effectIndex - 图标索引
- */
+// ===================================================================================
+// 1. 辅助函数 (Helpers)
+// ===================================================================================
+
 const resolveColor = (info, effectIndex) => {
   if (!info || !info.action) return store.getColor('default')
-
   const { action, trackIndex } = info
-
-  // A. 优先：小图标属性
   if (effectIndex !== undefined && effectIndex !== null) {
     const effect = action.physicalAnomaly?.[effectIndex]
     if (effect) return store.getColor(effect.type)
     return store.getColor('default')
   }
-
-  // B. 特殊动作类型固定色
   if (action.type === 'link') return store.getColor('link')
   if (action.type === 'execution') return store.getColor('execution')
-  if (action.type === 'attack') return store.getColor('physical') // 重击强制物理
-
-  // C. 优先读取动作自带属性
-  if (action.element) {
-    return store.getColor(action.element)
-  }
-
-  // D. 回退查找干员属性
-  // 如果动作本身没记录属性，就去查这条轨道是谁的
+  if (action.type === 'attack') return store.getColor('physical')
+  if (action.element) return store.getColor(action.element)
   if (trackIndex !== undefined && trackIndex !== null) {
     const track = store.tracks[trackIndex]
-    if (track && track.id) {
-      // 获取该干员的属性色 (如 Blaze -> Red)
-      return store.getCharacterElementColor(track.id)
-    }
+    if (track && track.id) return store.getCharacterElementColor(track.id)
   }
-
-  // E. 最后兜底 (战技默认白，终结技默认青)
   return store.getColor(action.type)
 }
 
-// === 2. 坐标计算 ===
 const getDomPosition = (elementId, containerEl, isSource) => {
   const el = document.getElementById(elementId)
   if (!el || !containerEl) return null
@@ -65,29 +45,65 @@ const getDomPosition = (elementId, containerEl, isSource) => {
   return { x, y }
 }
 
+const getTriggerDotPosition = (instanceId, containerEl) => {
+  const actionEl = document.getElementById(`action-${instanceId}`)
+  if (!actionEl) return null
+  const dotEl = actionEl.querySelector('.tw-dot')
+  if (!dotEl) return null
+
+  const rect = dotEl.getBoundingClientRect()
+  const containerRect = containerEl.getBoundingClientRect()
+  const x = (rect.left - containerRect.left) + (rect.width / 2) + containerEl.scrollLeft
+  const y = (rect.top - containerRect.top) + (rect.height / 2) + containerEl.scrollTop
+  return { x, y }
+}
+
 const getTrackCenterY = (trackIndex) => {
   const rowEl = document.getElementById(`track-row-${trackIndex}`)
   if (rowEl) return rowEl.offsetTop + (rowEl.offsetHeight / 2)
   return 20 + trackIndex * 80
 }
 
+// ===================================================================================
+// 2. 核心计算 (Calculation)
+// ===================================================================================
+
 const calculatePoint = (nodeId, effectIndex, isSource) => {
   const info = store.getActionPositionInfo(nodeId)
   if (!info) return null
 
+  // 1. 连到异常图标 (DOM)
   if (effectIndex !== undefined && effectIndex !== null) {
     const domId = `anomaly-${nodeId}-${effectIndex}`
     const pos = getDomPosition(domId, props.containerRef, isSource)
     if (pos) return { x: pos.x, y: pos.y }
   }
 
-  const x = isSource
-      ? (info.action.startTime + info.action.duration) * store.timeBlockWidth
-      : info.action.startTime * store.timeBlockWidth
+  // 2. 连到触发窗口小球 (DOM)
+  if (!isSource && info.action.triggerWindow > 0) {
+    const dotPos = getTriggerDotPosition(nodeId, props.containerRef)
+    if (dotPos) return { x: dotPos.x, y: dotPos.y }
+  }
 
+  // 3. 逻辑坐标估算
+  let timePoint = 0
+  if (isSource) {
+    timePoint = info.action.startTime + info.action.duration
+  } else {
+    const window = info.action.triggerWindow || 0
+    timePoint = info.action.startTime - window
+  }
+
+  const x = timePoint * store.timeBlockWidth
   let y = getTrackCenterY(info.trackIndex)
 
-  if (!isSource && effectIndex == null) {
+  // DOM 获取失败时的 Y 轴修正 (保留你调好的数值)
+  if (!isSource && info.action.triggerWindow > 0) {
+    y += 29.25
+  }
+
+  // 多线分散逻辑 (仅针对普通无窗口动作)
+  if (!isSource && effectIndex == null && info.action.triggerWindow <= 0) {
     const incoming = store.getIncomingConnections(nodeId)
     const generalIncoming = incoming.filter(c => c.toEffectIndex == null)
     generalIncoming.sort((a, b) => a.id.localeCompare(b.id))
@@ -101,24 +117,20 @@ const calculatePoint = (nodeId, effectIndex, isSource) => {
   return { x, y }
 }
 
-// === 3. 路径生成 ===
 const pathInfo = computed(() => {
-  const _trigger = props.renderKey
+  const _trigger = props.renderKey // 依赖追踪
   const conn = props.connection
 
-  // 获取完整的 info 对象 (包含 trackIndex)
   const fromInfo = store.getActionPositionInfo(conn.from)
   const toInfo = store.getActionPositionInfo(conn.to)
 
   if (!fromInfo || !toInfo) return null
 
-  // 计算坐标
   const start = calculatePoint(conn.from, conn.fromEffectIndex, true)
   const end = calculatePoint(conn.to, conn.toEffectIndex, false)
 
   if (!start || !end) return null
 
-  // 解析颜色 (传入完整的 info 对象)
   const colorStart = resolveColor(fromInfo, conn.fromEffectIndex)
   const colorEnd = resolveColor(toInfo, conn.toEffectIndex)
 
@@ -146,48 +158,17 @@ const pathInfo = computed(() => {
           :x2="pathInfo.endPoint.x"
           :y2="pathInfo.endPoint.y"
       >
-        <stop offset="0%" :stop-color="pathInfo.colors.start" stop-opacity="0.8" />
-        <stop offset="100%" :stop-color="pathInfo.colors.end" stop-opacity="1" />
+        <stop offset="0%" :stop-color="pathInfo.colors.start" stop-opacity="0.8"/>
+        <stop offset="100%" :stop-color="pathInfo.colors.end" stop-opacity="1"/>
       </linearGradient>
     </defs>
 
-    <path
-        :d="pathInfo.d"
-        fill="none"
-        :stroke="pathInfo.colors.end"
-        stroke-width="6"
-        stroke-opacity="0.05"
-        stroke-linecap="round"
-        class="hover-zone"
-    />
-
-    <path
-        :d="pathInfo.d"
-        fill="none"
-        :stroke="`url(#${gradientId})`"
-        stroke-width="2"
-        stroke-linecap="round"
-        class="main-path"
-    />
+    <path :d="pathInfo.d" fill="none" :stroke="pathInfo.colors.end" stroke-width="6" stroke-opacity="0.05" stroke-linecap="round" class="hover-zone"/>
+    <path :d="pathInfo.d" fill="none" :stroke="`url(#${gradientId})`" stroke-width="2" stroke-linecap="round" class="main-path"/>
 
     <circle r="2">
-      <animateMotion
-          :path="pathInfo.d"
-          dur="1.5s"
-          repeatCount="indefinite"
-          calcMode="spline"
-          keyTimes="0;1"
-          keySplines="0.4 0 0.2 1"
-      />
-      <animate
-          attributeName="fill"
-          :values="`${pathInfo.colors.start};${pathInfo.colors.end}`"
-          dur="1.5s"
-          repeatCount="indefinite"
-          calcMode="spline"
-          keyTimes="0;1"
-          keySplines="0.4 0 0.2 1"
-      />
+      <animateMotion :path="pathInfo.d" dur="1.5s" repeatCount="indefinite" calcMode="spline" keyTimes="0;1" keySplines="0.4 0 0.2 1"/>
+      <animate attributeName="fill" :values="`${pathInfo.colors.start};${pathInfo.colors.end}`" dur="1.5s" repeatCount="indefinite" calcMode="spline" keyTimes="0;1" keySplines="0.4 0 0.2 1"/>
     </circle>
   </g>
 </template>
@@ -195,7 +176,7 @@ const pathInfo = computed(() => {
 <style scoped>
 .main-path {
   pointer-events: none;
-  filter: drop-shadow(0 0 2px rgba(0,0,0,0.5));
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.5));
   stroke-dasharray: 10, 5;
   animation: dash-flow 30s linear infinite;
 }
@@ -211,6 +192,8 @@ const pathInfo = computed(() => {
 }
 
 @keyframes dash-flow {
-  to { stroke-dashoffset: -1000; }
+  to {
+    stroke-dashoffset: -1000;
+  }
 }
 </style>
