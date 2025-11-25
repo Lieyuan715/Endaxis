@@ -131,7 +131,10 @@
       "ultimate_spGain": 0,
       "skill_teamGaugeGain": 0,
       "link_stagger": 16,
-      "accept_team_gauge": true
+      "accept_team_gauge": true,
+      "skill_anomaly_delays": [
+        1.5
+      ]
     },
     {
       "id": "POGRANICHNK",
@@ -223,7 +226,10 @@
       "skill_spGain": 0,
       "ultimate_spGain": 0,
       "skill_teamGaugeGain": 6,
-      "accept_team_gauge": true
+      "accept_team_gauge": true,
+      "skill_anomaly_delays": [
+        1.5
+      ]
     },
     {
       "id": "ARDELIA",

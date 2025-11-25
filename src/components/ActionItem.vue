@@ -11,7 +11,6 @@ const store = useTimelineStore()
 const { iconDatabase } = storeToRefs(store)
 const isSelected = computed(() => store.isActionSelected(props.action.instanceId))
 
-// 判断是否为“幽灵模式”（只显示触发窗口）
 const isGhostMode = computed(() => (props.action.triggerWindow || 0) < 0)
 
 const themeColor = computed(() => {
@@ -32,7 +31,6 @@ const themeColor = computed(() => {
   return store.getColor('default')
 })
 
-// 主容器样式：如果是 Ghost 模式，隐藏视觉本体
 const style = computed(() => {
   const widthUnit = store.timeBlockWidth
   const left = (props.action.startTime || 0) * widthUnit
@@ -40,7 +38,6 @@ const style = computed(() => {
   const finalWidth = width < 2 ? 2 : width
   const color = themeColor.value
 
-  // 基础布局属性
   const baseStyle = {
     position: 'absolute',
     top: '0',
@@ -51,7 +48,6 @@ const style = computed(() => {
     zIndex: isSelected.value ? 20 : 10,
   }
 
-  // 如果是幽灵模式，隐藏本体视觉
   if (isGhostMode.value) {
     return {
       ...baseStyle,
@@ -59,11 +55,10 @@ const style = computed(() => {
       backgroundColor: 'transparent',
       boxShadow: 'none',
       color: 'transparent',
-      pointerEvents: isSelected.value ? 'auto' : 'none' // 可选：非选中时穿透，方便操作下层
+      pointerEvents: isSelected.value ? 'auto' : 'none'
     }
   }
 
-  // 正常模式
   return {
     ...baseStyle,
     border: `2px dashed ${isSelected.value ? '#ffffff' : color}`,
@@ -141,20 +136,47 @@ function hexToRgba(hex, alpha) {
 const renderableAnomalies = computed(() => {
   const raw = props.action.physicalAnomaly || []
   if (raw.length === 0) return []
+
   const rows = Array.isArray(raw[0]) ? raw : [raw]
+
+  // 获取行延迟数据
+  const rowDelays = props.action.anomalyRowDelays || []
+
   const widthUnit = store.timeBlockWidth
   const ICON_SIZE = 20
   const GAP = 2
+
   const resultRows = []
+
   rows.forEach((row, rowIndex) => {
-    let currentLeft = 0
+    const startDelay = rowDelays[rowIndex] || 0
+    let currentLeft = startDelay * widthUnit
+
     const processedRow = row.map((effect, colIndex) => {
       const durationWidth = effect.duration > 0 ? (effect.duration * widthUnit) : 0
       const BAR_MARGIN = 2
+
       let finalBarWidth = durationWidth
-      if (colIndex > 0 && finalBarWidth > 0) finalBarWidth = Math.max(0, finalBarWidth - ICON_SIZE)
+
+      if (finalBarWidth > 0) {
+        finalBarWidth = Math.max(0, finalBarWidth - ICON_SIZE)
+      }
+
       if (finalBarWidth > 0) finalBarWidth = Math.max(0, finalBarWidth - BAR_MARGIN)
-      const itemLayout = { data: effect, rowIndex, colIndex, style: { left: `${currentLeft}px`, bottom: `${100 + (rowIndex * 50)}%`, position: 'absolute', zIndex: 15 + rowIndex }, barWidth: finalBarWidth }
+
+      const itemLayout = {
+        data: effect,
+        rowIndex,
+        colIndex,
+        style: {
+          left: `${currentLeft}px`,
+          bottom: `${100 + (rowIndex * 50)}%`,
+          position: 'absolute',
+          zIndex: 15 + rowIndex
+        },
+        barWidth: finalBarWidth
+      }
+
       const occupiedWidth = finalBarWidth > 0 ? (BAR_MARGIN + finalBarWidth) : 0
       currentLeft += ICON_SIZE + occupiedWidth + GAP
       return itemLayout
@@ -225,7 +247,17 @@ function onIconClick(evt, index) { evt.stopPropagation(); if (store.isLinking) {
 .action-item-wrapper:hover { filter: brightness(1.2); z-index: 50 !important; }
 
 /* === 异常状态层 === */
-.anomalies-overlay { position: absolute; top: 0; left: calc(100% - 20px); width: 0; height: 100%; pointer-events: none; overflow: visible; }
+.anomalies-overlay {
+  position: absolute;
+  top: 0;
+  left: -1px;
+  width: 100%;
+
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
 .anomaly-wrapper { display: flex; align-items: center; height: 22px; pointer-events: none; white-space: nowrap; }
 .anomaly-icon-box { width: 20px; height: 20px; background-color: #333; border: 1px solid #999; box-sizing: border-box; display: flex; align-items: center; justify-content: center; position: relative; z-index: 10; flex-shrink: 0; pointer-events: auto; cursor: pointer; transition: transform 0.1s, border-color 0.1s; }
 .anomaly-icon-box:hover { border-color: #ffd700; transform: scale(1.2); z-index: 20; }

@@ -160,6 +160,7 @@ export const useTimelineStore = defineStore('timeline', () => {
 
         const getAnomalies = (list) => list || []
         const getAllowed = (list) => list || []
+        const getRowDelays = (list) => list || []
 
         const createBaseSkill = (suffix, type, name) => {
             const globalId = `${activeChar.id}_${suffix}`
@@ -203,7 +204,8 @@ export const useTimelineStore = defineStore('timeline', () => {
                 id: globalId, type: type, name: name, element: derivedElement,
                 ...merged,
                 allowedTypes: getAllowed(activeChar[`${suffix}_allowed_types`]),
-                physicalAnomaly: getAnomalies(activeChar[`${suffix}_anomalies`])
+                physicalAnomaly: getAnomalies(activeChar[`${suffix}_anomalies`]),
+                anomalyRowDelays: getRowDelays(activeChar[`${suffix}_anomaly_delays`])
             }
         }
 

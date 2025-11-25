@@ -94,6 +94,21 @@ function removeEffect(r, c) {
   editingIndexObj.value = null;
 }
 
+// 【新增】获取和更新行延迟
+function getRowDelay(rowIndex) {
+  const delays = selectedAction.value?.anomalyRowDelays || []
+  return delays[rowIndex] || 0
+}
+
+function updateRowDelay(rowIndex, value) {
+  const currentDelays = [...(selectedAction.value?.anomalyRowDelays || [])]
+  while (currentDelays.length <= rowIndex) {
+    currentDelays.push(0)
+  }
+  currentDelays[rowIndex] = value
+  store.updateAction(store.selectedActionId, { anomalyRowDelays: currentDelays })
+}
+
 const iconOptions = computed(() => {
   const allGlobalKeys = Object.keys(store.iconDatabase);
   const allowed = selectedAction.value?.allowedTypes;
@@ -317,6 +332,18 @@ function updateCustomBarItem(index, key, value) {
         <template #item="{ element: row, index: rowIndex }">
           <div class="anomaly-editor-row">
             <div class="row-handle">⋮</div>
+
+            <div class="row-delay-input" title="该行起始延迟 (秒)">
+              <span class="delay-icon">↦</span>
+              <input
+                  type="number"
+                  :value="getRowDelay(rowIndex)"
+                  @input="e => updateRowDelay(rowIndex, Number(e.target.value))"
+                  step="0.1"
+                  min="0"
+                  class="delay-num"
+              />
+            </div>
 
             <draggable
                 :list="row"
@@ -878,7 +905,6 @@ input:focus, select:focus {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
   line-height: 1;
   font-size: 16px;
   padding-bottom: -2px;
@@ -902,4 +928,44 @@ input:focus, select:focus {
   background: none; border: none; color: #666; cursor: pointer; font-size: 14px; padding: 0; line-height: 1;
 }
 .remove-bar-btn:hover { color: #ff7875; }
+
+.row-delay-input {
+  display: flex;
+  align-items: center;
+  margin-right: 6px;
+  background: #222;
+  border: 1px solid #555;
+  border-radius: 3px;
+  padding: 0 2px;
+  height: 22px;
+}
+
+.delay-icon {
+  color: #888;
+  font-size: 10px;
+  margin-right: 2px;
+  user-select: none;
+}
+
+.delay-num {
+  width: 30px !important;
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  height: 100% !important;
+  font-size: 11px !important;
+  text-align: center;
+  color: #ffd700 !important;
+}
+
+.delay-num:focus {
+  outline: none;
+}
+
+/* Chrome/Safari 隐藏 number input 的上下箭头，保持界面整洁 */
+.delay-num::-webkit-outer-spin-button,
+.delay-num::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 </style>

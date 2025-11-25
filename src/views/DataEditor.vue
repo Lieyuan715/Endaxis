@@ -135,7 +135,6 @@ function onCheckChange(char, skillType, key) {
   }
 }
 
-// === 新增：充能联动逻辑 (DataEditor) ===
 function onSkillGaugeInput(event) {
   const val = Number(event.target.value)
   if (selectedChar.value) {
@@ -178,22 +177,18 @@ function getAvailableAnomalyOptions(skillType) {
 
 // === 5. 二维数组处理逻辑 (New 2D Logic) ===
 
-// 获取安全的二维数组数据 (兼容旧数据)
 function getAnomalyRows(char, skillType) {
   if (!char) return []
   const key = `${skillType}_anomalies`
   const raw = char[key] || []
   if (raw.length === 0) return []
-  // 如果第一项不是数组，说明是旧的一维数据，包一层变成 [[item]]
   if (!Array.isArray(raw[0])) return [raw]
   return raw
 }
 
-// 添加新行
 function addAnomalyRow(char, skillType) {
   const key = `${skillType}_anomalies`
   let rows = getAnomalyRows(char, skillType)
-  // 如果原本是空的或者被转换过，需要重新赋值回去确保是响应式的
   if (!char[key] || (char[key].length > 0 && !Array.isArray(char[key][0]))) {
     char[key] = rows
   }
@@ -204,7 +199,6 @@ function addAnomalyRow(char, skillType) {
   char[key].push([{ type: defaultType, stacks: 1, duration: 0 }])
 }
 
-// 在指定行添加效果
 function addAnomalyToRow(char, skillType, rowIndex) {
   const rows = getAnomalyRows(char, skillType)
   const allowedList = char[`${skillType}_allowed_types`] || []
@@ -215,7 +209,6 @@ function addAnomalyToRow(char, skillType, rowIndex) {
   }
 }
 
-// 删除指定效果
 function removeAnomaly(char, skillType, rowIndex, colIndex) {
   const rows = getAnomalyRows(char, skillType)
   if (rows[rowIndex]) {
@@ -224,6 +217,26 @@ function removeAnomaly(char, skillType, rowIndex, colIndex) {
       rows.splice(rowIndex, 1)
     }
   }
+}
+
+// 获取行延迟
+function getRowDelay(char, skillType, rowIndex) {
+  if (!char) return 0
+  const key = `${skillType}_anomaly_delays`
+  const delays = char[key] || []
+  return delays[rowIndex] || 0
+}
+
+// 设置行延迟
+function setRowDelay(char, skillType, rowIndex, val) {
+  if (!char) return
+  const key = `${skillType}_anomaly_delays`
+  if (!char[key]) char[key] = []
+  // 补齐数组
+  while (char[key].length <= rowIndex) {
+    char[key].push(0)
+  }
+  char[key][rowIndex] = val
 }
 </script>
 
@@ -322,186 +335,75 @@ function removeAnomaly(char, skillType, rowIndex, colIndex) {
             </div>
           </div>
 
-          <div v-show="activeTab === 'attack'" class="form-section">
-            <h3 class="section-title">数值配置</h3>
-            <div class="form-grid three-col">
-              <div class="form-group"><label>动作持续 (s)</label><input type="number" step="0.1" v-model.number="selectedChar.attack_duration"></div>
-              <div class="form-group"><label>SP 回复</label><input type="number" v-model.number="selectedChar.attack_spGain"></div>
-              <div class="form-group"><label>失衡值</label><input type="number" v-model.number="selectedChar.attack_stagger"></div>
-            </div>
+          <template v-for="type in ['attack', 'skill', 'link', 'ultimate', 'execution']" :key="type">
+            <div v-show="activeTab === type" class="form-section">
+              <h3 class="section-title">数值配置</h3>
+              <div class="form-grid three-col">
+                <div class="form-group"><label>持续时间 (s)</label><input type="number" step="0.1" v-model.number="selectedChar[`${type}_duration`]"></div>
+                <div class="form-group" v-if="type !== 'link'"><label>SP 回复</label><input type="number" v-model.number="selectedChar[`${type}_spGain`]"></div>
 
-            <h3 class="section-title">效果池配置</h3>
-            <div class="checkbox-grid">
-              <label v-for="key in effectKeys" :key="`attack_${key}`" class="cb-item">
-                <input type="checkbox" :value="key" v-model="selectedChar.attack_allowed_types" @change="onCheckChange(selectedChar, 'attack', key)">
-                {{ EFFECT_NAMES[key] }}
-              </label>
-              <label v-for="buff in selectedChar.exclusive_buffs" :key="`attack_${buff.key}`" class="cb-item exclusive">
-                <input type="checkbox" :value="buff.key" v-model="selectedChar.attack_allowed_types">
-                ★ {{ buff.name }}
-              </label>
-            </div>
+                <div class="form-group" v-if="type === 'attack' || type === 'skill' || type === 'link' || type === 'ultimate'"><label>失衡值</label><input type="number" v-model.number="selectedChar[`${type}_stagger`]"></div>
 
-            <div class="matrix-editor-area">
-              <h3 class="section-title">默认附带状态 (二维矩阵)</h3>
-              <div class="anomalies-grid-editor">
-                <div v-for="(row, rIndex) in getAnomalyRows(selectedChar, 'attack')" :key="rIndex" class="editor-row">
-                  <div v-for="(item, cIndex) in row" :key="cIndex" class="editor-card">
-                    <div class="card-header">
-                      <span class="card-label">R{{rIndex+1}}:C{{cIndex+1}}</span>
-                      <button class="btn-icon-del" @click="removeAnomaly(selectedChar, 'attack', rIndex, cIndex)">×</button>
+                <div class="form-group" v-if="type === 'skill'"><label>SP 消耗</label><input type="number" v-model.number="selectedChar[`${type}_spCost`]"></div>
+                <div class="form-group" v-if="type === 'skill'"><label>自身充能</label><input type="number" v-model.number="selectedChar[`${type}_gaugeGain`]" @input="onSkillGaugeInput"></div>
+                <div class="form-group" v-if="type === 'skill'"><label>队友充能</label><input type="number" v-model.number="selectedChar[`${type}_teamGaugeGain`]"></div>
+
+                <div class="form-group" v-if="type === 'link'"><label>CD (s)</label><input type="number" v-model.number="selectedChar[`${type}_cooldown`]"></div>
+                <div class="form-group" v-if="type === 'link'"><label>自身充能</label><input type="number" v-model.number="selectedChar[`${type}_gaugeGain`]"></div>
+
+                <div class="form-group" v-if="type === 'ultimate'"><label>充能消耗</label><input type="number" v-model.number="selectedChar[`${type}_gaugeMax`]"></div>
+                <div class="form-group" v-if="type === 'ultimate'"><label>自身充能</label><input type="number" v-model.number="selectedChar[`${type}_gaugeReply`]"></div>
+              </div>
+
+              <h3 class="section-title">效果池配置</h3>
+              <div class="checkbox-grid">
+                <label v-for="key in effectKeys" :key="`${type}_${key}`" class="cb-item">
+                  <input type="checkbox" :value="key" v-model="selectedChar[`${type}_allowed_types`]" @change="onCheckChange(selectedChar, type, key)">
+                  {{ EFFECT_NAMES[key] }}
+                </label>
+                <label v-for="buff in selectedChar.exclusive_buffs" :key="`${type}_${buff.key}`" class="cb-item exclusive">
+                  <input type="checkbox" :value="buff.key" v-model="selectedChar[`${type}_allowed_types`]">
+                  ★ {{ buff.name }}
+                </label>
+              </div>
+
+              <div class="matrix-editor-area">
+                <h3 class="section-title">默认附带状态 (二维矩阵)</h3>
+                <div class="anomalies-grid-editor">
+                  <div v-for="(row, rIndex) in getAnomalyRows(selectedChar, type)" :key="rIndex" class="editor-row">
+
+                    <div class="row-delay-input" title="该行起始延迟 (秒)">
+                      <span class="delay-icon">↦</span>
+                      <input
+                          type="number"
+                          :value="getRowDelay(selectedChar, type, rIndex)"
+                          @input="e => setRowDelay(selectedChar, type, rIndex, Number(e.target.value))"
+                          step="0.1"
+                          min="0"
+                          class="delay-num"
+                      />
                     </div>
-                    <select v-model="item.type" class="card-input">
-                      <option v-for="opt in getAvailableAnomalyOptions('attack')" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                    </select>
-                    <div class="card-row">
-                      <input type="number" v-model.number="item.stacks" placeholder="层" class="mini-input"><span class="unit">层</span>
-                      <input type="number" v-model.number="item.duration" placeholder="秒" step="0.5" class="mini-input"><span class="unit">s</span>
+
+                    <div v-for="(item, cIndex) in row" :key="cIndex" class="editor-card">
+                      <div class="card-header">
+                        <span class="card-label">R{{rIndex+1}}:C{{cIndex+1}}</span>
+                        <button class="btn-icon-del" @click="removeAnomaly(selectedChar, type, rIndex, cIndex)">×</button>
+                      </div>
+                      <select v-model="item.type" class="card-input">
+                        <option v-for="opt in getAvailableAnomalyOptions(type)" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                      </select>
+                      <div class="card-row">
+                        <input type="number" v-model.number="item.stacks" placeholder="层" class="mini-input"><span class="unit">层</span>
+                        <input type="number" v-model.number="item.duration" placeholder="秒" step="0.5" class="mini-input"><span class="unit">s</span>
+                      </div>
                     </div>
+                    <button class="btn-add-col" @click="addAnomalyToRow(selectedChar, type, rIndex)">+</button>
                   </div>
-                  <button class="btn-add-col" @click="addAnomalyToRow(selectedChar, 'attack', rIndex)">+</button>
+                  <button class="btn-add-row" @click="addAnomalyRow(selectedChar, type)" :disabled="getAvailableAnomalyOptions(type).length === 0">+ 新增效果行</button>
                 </div>
-                <button class="btn-add-row" @click="addAnomalyRow(selectedChar, 'attack')" :disabled="getAvailableAnomalyOptions('attack').length === 0">+ 新增效果行</button>
               </div>
             </div>
-          </div>
-
-          <div v-show="activeTab === 'skill'" class="form-section">
-            <h3 class="section-title">数值配置</h3>
-            <div class="form-grid four-col">
-              <div class="form-group"><label>属性 (可选)</label>
-                <select v-model="selectedChar.skill_element"><option :value="undefined">跟随干员</option><option v-for="elm in ELEMENTS" :key="elm.value" :value="elm.value">{{ elm.label }}</option></select>
-              </div>
-              <div class="form-group"><label>持续时间 (s)</label><input type="number" step="0.1" v-model.number="selectedChar.skill_duration"></div>
-              <div class="form-group"><label>SP 消耗</label><input type="number" v-model.number="selectedChar.skill_spCost"></div>
-              <div class="form-group"><label>SP 回复</label><input type="number" v-model.number="selectedChar.skill_spGain"></div>
-              <div class="form-group"><label>失衡值</label><input type="number" v-model.number="selectedChar.skill_stagger"></div>
-
-              <div class="form-group">
-                <label>自身充能 (联动队友)</label>
-                <input type="number" v-model.number="selectedChar.skill_gaugeGain" @input="onSkillGaugeInput">
-              </div>
-
-              <div class="form-group"><label>队友充能</label><input type="number" v-model.number="selectedChar.skill_teamGaugeGain"></div>
-            </div>
-
-            <h3 class="section-title">效果池配置</h3>
-            <div class="checkbox-grid">
-              <label v-for="key in effectKeys" :key="`skill_${key}`" class="cb-item"><input type="checkbox" :value="key" v-model="selectedChar.skill_allowed_types" @change="onCheckChange(selectedChar, 'skill', key)">{{ EFFECT_NAMES[key] }}</label>
-              <label v-for="buff in selectedChar.exclusive_buffs" :key="`skill_${buff.key}`" class="cb-item exclusive"><input type="checkbox" :value="buff.key" v-model="selectedChar.skill_allowed_types">★ {{ buff.name }}</label>
-            </div>
-
-            <div class="matrix-editor-area">
-              <h3 class="section-title">默认附带状态 (二维矩阵)</h3>
-              <div class="anomalies-grid-editor">
-                <div v-for="(row, rIndex) in getAnomalyRows(selectedChar, 'skill')" :key="rIndex" class="editor-row">
-                  <div v-for="(item, cIndex) in row" :key="cIndex" class="editor-card">
-                    <div class="card-header"><span class="card-label">R{{rIndex+1}}:C{{cIndex+1}}</span><button class="btn-icon-del" @click="removeAnomaly(selectedChar, 'skill', rIndex, cIndex)">×</button></div>
-                    <select v-model="item.type" class="card-input"><option v-for="opt in getAvailableAnomalyOptions('skill')" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select>
-                    <div class="card-row"><input type="number" v-model.number="item.stacks" class="mini-input"><span class="unit">层</span><input type="number" v-model.number="item.duration" step="0.5" class="mini-input"><span class="unit">s</span></div>
-                  </div>
-                  <button class="btn-add-col" @click="addAnomalyToRow(selectedChar, 'skill', rIndex)">+</button>
-                </div>
-                <button class="btn-add-row" @click="addAnomalyRow(selectedChar, 'skill')" :disabled="getAvailableAnomalyOptions('skill').length === 0">+ 新增效果行</button>
-              </div>
-            </div>
-          </div>
-
-          <div v-show="activeTab === 'link'" class="form-section">
-            <h3 class="section-title">数值配置</h3>
-            <div class="form-grid three-col">
-              <div class="form-group"><label>持续时间 (s)</label><input type="number" step="0.1" v-model.number="selectedChar.link_duration"></div>
-              <div class="form-group"><label>CD (s)</label><input type="number" v-model.number="selectedChar.link_cooldown"></div>
-              <div class="form-group"><label>SP 回复</label><input type="number" v-model.number="selectedChar.link_spGain"></div>
-              <div class="form-group"><label>失衡值</label><input type="number" v-model.number="selectedChar.link_stagger"></div>
-              <div class="form-group"><label>自身充能</label><input type="number" v-model.number="selectedChar.link_gaugeGain"></div>
-            </div>
-
-            <h3 class="section-title">效果池配置</h3>
-            <div class="checkbox-grid">
-              <label v-for="key in effectKeys" :key="`link_${key}`" class="cb-item"><input type="checkbox" :value="key" v-model="selectedChar.link_allowed_types" @change="onCheckChange(selectedChar, 'link', key)">{{ EFFECT_NAMES[key] }}</label>
-              <label v-for="buff in selectedChar.exclusive_buffs" :key="`link_${buff.key}`" class="cb-item exclusive"><input type="checkbox" :value="buff.key" v-model="selectedChar.link_allowed_types">★ {{ buff.name }}</label>
-            </div>
-
-            <div class="matrix-editor-area">
-              <h3 class="section-title">默认附带状态 (二维矩阵)</h3>
-              <div class="anomalies-grid-editor">
-                <div v-for="(row, rIndex) in getAnomalyRows(selectedChar, 'link')" :key="rIndex" class="editor-row">
-                  <div v-for="(item, cIndex) in row" :key="cIndex" class="editor-card">
-                    <div class="card-header"><span class="card-label">R{{rIndex+1}}:C{{cIndex+1}}</span><button class="btn-icon-del" @click="removeAnomaly(selectedChar, 'link', rIndex, cIndex)">×</button></div>
-                    <select v-model="item.type" class="card-input"><option v-for="opt in getAvailableAnomalyOptions('link')" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select>
-                    <div class="card-row"><input type="number" v-model.number="item.stacks" class="mini-input"><span class="unit">层</span><input type="number" v-model.number="item.duration" step="0.5" class="mini-input"><span class="unit">s</span></div>
-                  </div>
-                  <button class="btn-add-col" @click="addAnomalyToRow(selectedChar, 'link', rIndex)">+</button>
-                </div>
-                <button class="btn-add-row" @click="addAnomalyRow(selectedChar, 'link')" :disabled="getAvailableAnomalyOptions('link').length === 0">+ 新增效果行</button>
-              </div>
-            </div>
-          </div>
-
-          <div v-show="activeTab === 'ultimate'" class="form-section">
-            <h3 class="section-title">数值配置</h3>
-            <div class="form-grid three-col">
-              <div class="form-group"><label>属性 (可选)</label>
-                <select v-model="selectedChar.ultimate_element"><option :value="undefined">跟随干员</option><option v-for="elm in ELEMENTS" :key="elm.value" :value="elm.value">{{ elm.label }}</option></select>
-              </div>
-              <div class="form-group"><label>持续时间 (s)</label><input type="number" step="0.1" v-model.number="selectedChar.ultimate_duration"></div>
-              <div class="form-group"><label>SP 回复</label><input type="number" v-model.number="selectedChar.ultimate_spGain"></div>
-              <div class="form-group"><label>失衡值</label><input type="number" v-model.number="selectedChar.ultimate_stagger"></div>
-              <div class="form-group"><label>充能消耗</label><input type="number" v-model.number="selectedChar.ultimate_gaugeMax"></div>
-              <div class="form-group"><label>自身充能</label><input type="number" v-model.number="selectedChar.ultimate_gaugeReply"></div>
-            </div>
-
-            <h3 class="section-title">效果池配置</h3>
-            <div class="checkbox-grid">
-              <label v-for="key in effectKeys" :key="`ultimate_${key}`" class="cb-item"><input type="checkbox" :value="key" v-model="selectedChar.ultimate_allowed_types" @change="onCheckChange(selectedChar, 'ultimate', key)">{{ EFFECT_NAMES[key] }}</label>
-              <label v-for="buff in selectedChar.exclusive_buffs" :key="`ultimate_${buff.key}`" class="cb-item exclusive"><input type="checkbox" :value="buff.key" v-model="selectedChar.ultimate_allowed_types">★ {{ buff.name }}</label>
-            </div>
-
-            <div class="matrix-editor-area">
-              <h3 class="section-title">默认附带状态 (二维矩阵)</h3>
-              <div class="anomalies-grid-editor">
-                <div v-for="(row, rIndex) in getAnomalyRows(selectedChar, 'ultimate')" :key="rIndex" class="editor-row">
-                  <div v-for="(item, cIndex) in row" :key="cIndex" class="editor-card">
-                    <div class="card-header"><span class="card-label">R{{rIndex+1}}:C{{cIndex+1}}</span><button class="btn-icon-del" @click="removeAnomaly(selectedChar, 'ultimate', rIndex, cIndex)">×</button></div>
-                    <select v-model="item.type" class="card-input"><option v-for="opt in getAvailableAnomalyOptions('ultimate')" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select>
-                    <div class="card-row"><input type="number" v-model.number="item.stacks" class="mini-input"><span class="unit">层</span><input type="number" v-model.number="item.duration" step="0.5" class="mini-input"><span class="unit">s</span></div>
-                  </div>
-                  <button class="btn-add-col" @click="addAnomalyToRow(selectedChar, 'ultimate', rIndex)">+</button>
-                </div>
-                <button class="btn-add-row" @click="addAnomalyRow(selectedChar, 'ultimate')" :disabled="getAvailableAnomalyOptions('ultimate').length === 0">+ 新增效果行</button>
-              </div>
-            </div>
-          </div>
-
-          <div v-show="activeTab === 'execution'" class="form-section">
-            <h3 class="section-title">数值配置</h3>
-            <div class="form-grid three-col">
-              <div class="form-group"><label>持续时间 (s)</label><input type="number" step="0.1" v-model.number="selectedChar.execution_duration"></div>
-              <div class="form-group"><label>SP 回复</label><input type="number" v-model.number="selectedChar.execution_spGain"></div>
-            </div>
-
-            <h3 class="section-title">效果池配置</h3>
-            <div class="checkbox-grid">
-              <label v-for="key in effectKeys" :key="`execution_${key}`" class="cb-item"><input type="checkbox" :value="key" v-model="selectedChar.execution_allowed_types" @change="onCheckChange(selectedChar, 'execution', key)">{{ EFFECT_NAMES[key] }}</label>
-              <label v-for="buff in selectedChar.exclusive_buffs" :key="`execution_${buff.key}`" class="cb-item exclusive"><input type="checkbox" :value="buff.key" v-model="selectedChar.execution_allowed_types">★ {{ buff.name }}</label>
-            </div>
-
-            <div class="matrix-editor-area">
-              <h3 class="section-title">默认附带状态 (二维矩阵)</h3>
-              <div class="anomalies-grid-editor">
-                <div v-for="(row, rIndex) in getAnomalyRows(selectedChar, 'execution')" :key="rIndex" class="editor-row">
-                  <div v-for="(item, cIndex) in row" :key="cIndex" class="editor-card">
-                    <div class="card-header"><span class="card-label">R{{rIndex+1}}:C{{cIndex+1}}</span><button class="btn-icon-del" @click="removeAnomaly(selectedChar, 'execution', rIndex, cIndex)">×</button></div>
-                    <select v-model="item.type" class="card-input"><option v-for="opt in getAvailableAnomalyOptions('execution')" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select>
-                    <div class="card-row"><input type="number" v-model.number="item.stacks" class="mini-input"><span class="unit">层</span><input type="number" v-model.number="item.duration" step="0.5" class="mini-input"><span class="unit">s</span></div>
-                  </div>
-                  <button class="btn-add-col" @click="addAnomalyToRow(selectedChar, 'execution', rIndex)">+</button>
-                </div>
-                <button class="btn-add-row" @click="addAnomalyRow(selectedChar, 'execution')" :disabled="getAvailableAnomalyOptions('execution').length === 0">+ 新增效果行</button>
-              </div>
-            </div>
-          </div>
+          </template>
 
         </div>
       </div>
@@ -606,7 +508,7 @@ function removeAnomaly(char, skillType, rowIndex, colIndex) {
 /* Matrix Editor */
 .matrix-editor-area { margin-top: 25px; border-top: 1px dashed #444; padding-top: 20px; }
 .anomalies-grid-editor { display: flex; flex-direction: column; gap: 10px; }
-.editor-row { display: flex; flex-wrap: wrap; gap: 10px; background: #1f1f1f; padding: 10px; border-radius: 6px; border: 1px solid #333; }
+.editor-row { display: flex; flex-wrap: wrap; gap: 10px; background: #1f1f1f; padding: 10px; border-radius: 6px; border: 1px solid #333; align-items: center; }
 .editor-card { background: #2b2b2b; border: 1px solid #444; border-radius: 6px; padding: 8px; width: 150px; display: flex; flex-direction: column; gap: 6px; transition: transform 0.2s; }
 .editor-card:hover { border-color: #666; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
 .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
@@ -631,4 +533,45 @@ function removeAnomaly(char, skillType, rowIndex, colIndex) {
 ::-webkit-scrollbar-thumb:hover { background: #555; }
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* 行延迟输入框样式 */
+.row-delay-input {
+  display: flex;
+  align-items: center;
+  margin-right: 6px;
+  background: #222;
+  border: 1px solid #555;
+  border-radius: 3px;
+  padding: 0 2px;
+  height: 22px;
+}
+
+.delay-icon {
+  color: #888;
+  font-size: 10px;
+  margin-right: 2px;
+  user-select: none;
+}
+
+.delay-num {
+  width: 30px !important;
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  height: 100% !important;
+  font-size: 11px !important;
+  text-align: center;
+  color: #ffd700 !important;
+}
+
+.delay-num:focus {
+  outline: none;
+}
+
+/* Chrome/Safari 隐藏 number input 的上下箭头 */
+.delay-num::-webkit-outer-spin-button,
+.delay-num::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 </style>
