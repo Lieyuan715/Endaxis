@@ -194,8 +194,13 @@ function calculateTimeFromEvent(evt) {
   const mouseX = evt.clientX
   const activeOffset = store.globalDragOffset || 0
   const mouseXInTrack = (mouseX - activeOffset) - trackRect.left + scrollLeft
-  const fractionalBlockIndex = mouseXInTrack / TIME_BLOCK_WIDTH.value
-  let startTime = Math.round(fractionalBlockIndex * 2) / 2
+  const rawTime = mouseXInTrack / TIME_BLOCK_WIDTH.value
+  const step = store.snapStep // 0.5 或 0.1
+
+  // 算法：比如 step是0.1，则 *10 取整再 /10
+  const inverse = 1 / step
+  let startTime = Math.round(rawTime * inverse) / inverse
+
   if (startTime < 0) startTime = 0
   return startTime
 }
@@ -219,6 +224,31 @@ function syncVerticalScroll() {
 // ===================================================================================
 // 5. 鼠标与拖拽逻辑
 // ===================================================================================
+
+const cachedSpData = computed(() => store.calculateGlobalSpData())
+
+const currentSpValue = computed(() => {
+  const time = cursorX.value / TIME_BLOCK_WIDTH.value
+  const points = cachedSpData.value
+
+  if (!points || points.length === 0) return store.systemConstants.initialSp
+
+  // 遍历寻找当前时间所在的区间
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i]
+    const p2 = points[i+1]
+
+    if (time >= p1.time && time < p2.time) {
+      // 线性插值计算当前时刻的精确 SP
+      const progress = (time - p1.time) / (p2.time - p1.time)
+      const val = p1.sp + (p2.sp - p1.sp) * progress
+      return Math.floor(val)
+    }
+  }
+
+  // 如果超出最后时间点，取最后一个值
+  return Math.floor(points[points.length - 1].sp)
+})
 
 function onGridMouseMove(evt) {
   if (!tracksContentRef.value) return
@@ -438,12 +468,30 @@ function onBackgroundClick(event) {
 }
 
 function handleKeyDown(event) {
+  // 如果正在输入文字（如在 DataEditor），忽略
+  const target = event.target
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+
   const hasSelection = store.selectedActionId || store.multiSelectedIds.size > 0
   if (!hasSelection) return
+
+  // 删除逻辑
   if (event.key === 'Delete') {
     event.preventDefault()
     const count = store.removeCurrentSelection()
     if (count > 0) ElMessage.success(`已删除 ${count} 个动作`)
+  }
+
+  // === 微调逻辑 ===
+  // 向左微调 0.1s
+  if (event.key === 'a' || event.key === 'A' || event.key === 'ArrowLeft') {
+    event.preventDefault()
+    store.nudgeSelection(-0.1)
+  }
+  // 向右微调 0.1s
+  if (event.key === 'd' || event.key === 'D' || event.key === 'ArrowRight') {
+    event.preventDefault()
+    store.nudgeSelection(0.1)
   }
 }
 
@@ -501,14 +549,21 @@ onUnmounted(() => {
           <path d="M12 8v8" stroke-width="1.5"/>
         </svg>
       </button>
+      <button class="guide-toggle-btn"
+              :class="{ 'is-active': store.snapStep === 0.1 }"
+              @click="store.toggleSnapStep"
+              title="切换吸附精度 (Alt+S)"
+              style="margin-left: 4px; font-size: 10px; font-weight: bold; width: 28px; padding: 0;">
+        {{ store.snapStep }}s
+      </button>
     </div>
 
     <div class="time-ruler-wrapper" ref="timeRulerWrapperRef" @click="store.selectTrack(null)">
       <div class="time-ruler-track">
         <div v-for="block in timeBlocks" :key="block" class="ruler-tick"
              :style="{ width: `${TIME_BLOCK_WIDTH}px` }"
-             :class="{ 'major-tick': (block % 5 === 0) }">
-          <span v-if="block % 5 === 0" class="tick-label">{{ block }}s</span>
+             :class="{ 'major-tick': (block - 1) % 5 === 0 }">
+          <span v-if="(block - 1) % 5 === 0" class="tick-label">{{ block - 1 }}s</span>
         </div>
       </div>
 
@@ -549,7 +604,14 @@ onUnmounted(() => {
          @mousemove="onGridMouseMove" @mouseleave="onGridMouseLeave">
 
       <div class="cursor-guide" :style="{ left: `${cursorX}px` }"
-           v-show="isCursorVisible && store.showCursorGuide && !store.isBoxSelectMode"></div>
+           v-show="isCursorVisible && store.showCursorGuide && !store.isBoxSelectMode">
+        <div class="guide-time-label">
+          {{ (cursorX / TIME_BLOCK_WIDTH).toFixed(1) }}s
+        </div>
+        <div class="guide-sp-label">
+          SP: {{ currentSpValue }}
+        </div>
+      </div>
       <div v-if="isBoxSelecting" class="selection-box-overlay"
            :style="{ left: `${boxRect.left}px`, top: `${boxRect.top}px`, width: `${boxRect.width}px`, height: `${boxRect.height}px` }"></div>
 
@@ -790,6 +852,40 @@ onUnmounted(() => {
   pointer-events: none;
   z-index: 5;
   box-shadow: 0 0 6px #ffd700;
+}
+
+.guide-labels-container {
+  position: absolute;
+  top: 0;
+  left: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.guide-time-label {
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: bold;
+  font-family: monospace;
+  padding: 2px 4px;
+  border-radius: 0 4px 4px 0;
+  white-space: nowrap;
+  line-height: 1;
+  width: fit-content;
+}
+
+.guide-sp-label {
+  color: #ffd700;
+  font-size: 10px;
+  font-weight: bold;
+  font-family: monospace;
+  padding: 2px 4px;
+  border-radius: 0 4px 4px 0;
+  white-space: nowrap;
+  line-height: 1;
+  width: fit-content;
+  text-shadow: 0 0 2px rgba(255, 215, 0, 0.5);
 }
 
 .selection-box-overlay {

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 // 工具：生成简易 UUID
 const uid = () => Math.random().toString(36).substring(2, 9)
@@ -18,7 +18,7 @@ export const useTimelineStore = defineStore('timeline', () => {
         maxStagger: 100
     })
 
-    const BASE_BLOCK_WIDTH = 50
+    const BASE_BLOCK_WIDTH = 50 // 基础宽度
     const TOTAL_DURATION = 120
 
     const ELEMENT_COLORS = {
@@ -56,11 +56,12 @@ export const useTimelineStore = defineStore('timeline', () => {
 
     const activeTrackId = ref(null)
     const timelineScrollLeft = ref(0)
-    const zoomLevel = ref(1.0)
 
-    // 默认关闭辅助线
+    // [已删除] const zoomLevel = ref(1.0) <--- 缩放状态已移除
+
     const showCursorGuide = ref(false)
     const cursorCurrentTime = ref(0)
+    const snapStep = ref(0.5) // 吸附步长
 
     // 拖拽相关
     const globalDragOffset = ref(0)
@@ -130,7 +131,7 @@ export const useTimelineStore = defineStore('timeline', () => {
     // 5. 计算属性 (Getters)
     // ===================================================================================
 
-    const timeBlockWidth = computed(() => BASE_BLOCK_WIDTH * zoomLevel.value)
+    const timeBlockWidth = computed(() => BASE_BLOCK_WIDTH)
 
     const getActionPositionInfo = (instanceId) => {
         for (let i = 0; i < tracks.value.length; i++) {
@@ -222,11 +223,11 @@ export const useTimelineStore = defineStore('timeline', () => {
     // 6. 基础操作 Actions
     // ===================================================================================
 
-    function setZoom(val) { if (val < 0.2) val = 0.2; if (val > 3.0) val = 3.0; zoomLevel.value = val }
     function setScrollLeft(val) { timelineScrollLeft.value = val }
     function setCursorTime(time) { cursorCurrentTime.value = Math.max(0, time) }
     function toggleCursorGuide() { showCursorGuide.value = !showCursorGuide.value }
     function toggleBoxSelectMode() { if (!isBoxSelectMode.value) isLinking.value = false; isBoxSelectMode.value = !isBoxSelectMode.value }
+    function toggleSnapStep() { snapStep.value = snapStep.value === 0.5 ? 0.1 : 0.5 }
 
     function setDraggingSkill(skill) { draggingSkillData.value = skill }
     function setDragOffset(offset) { globalDragOffset.value = offset }
@@ -308,7 +309,6 @@ export const useTimelineStore = defineStore('timeline', () => {
         if (!clipboard.value) return
         const { actions, connections: clipConns, baseTime } = clipboard.value
         const idMap = new Map()
-        // 智能计算偏移
         let timeDelta = (cursorCurrentTime.value >= 0) ? (cursorCurrentTime.value - baseTime) : 2.0
 
         actions.forEach(item => {
@@ -380,7 +380,6 @@ export const useTimelineStore = defineStore('timeline', () => {
     function updateTrackInitialGauge(trackId, value) { const track = tracks.value.find(t => t.id === trackId); if (track) { track.initialGauge = value; commitState(); } }
 
     function removeAnomaly(instanceId, rowIndex, colIndex) {
-        // 1. 找到动作实例
         let action = null;
         for (const track of tracks.value) {
             const found = track.actions.find(a => a.instanceId === instanceId);
@@ -391,43 +390,55 @@ export const useTimelineStore = defineStore('timeline', () => {
         const rows = action.physicalAnomaly || [];
         if (!rows[rowIndex]) return;
 
-        // 2. 计算被删除图标的扁平索引 (Flat Index)
         let flatIndex = 0;
         for (let r = 0; r < rowIndex; r++) {
-            flatIndex += rows[r].length; // 累加前几行的长度
+            flatIndex += rows[r].length;
         }
-        flatIndex += colIndex; // 加上当前行的列偏移
+        flatIndex += colIndex;
 
-        // 3. 先删除连在被删图标上的连线
         connections.value = connections.value.filter(conn => {
-            // 如果连线是从这个图标出发的，删
             const isSource = (conn.from === instanceId && conn.fromEffectIndex === flatIndex);
-            // 如果连线是连向这个图标的，删
             const isTarget = (conn.to === instanceId && conn.toEffectIndex === flatIndex);
             return !(isSource || isTarget);
         });
 
-        // 4. 更新剩余连线的索引 (后续图标前移)
         connections.value.forEach(conn => {
-            // 处理起点：如果在被删图标之后，索引减1
             if (conn.from === instanceId && conn.fromEffectIndex !== null && conn.fromEffectIndex > flatIndex) {
                 conn.fromEffectIndex--;
             }
-            // 处理终点：如果在被删图标之后，索引减1
             if (conn.to === instanceId && conn.toEffectIndex !== null && conn.toEffectIndex > flatIndex) {
                 conn.toEffectIndex--;
             }
         });
 
-        // 5. 执行数据删除逻辑
         rows[rowIndex].splice(colIndex, 1);
-        // 如果该行空了，删除整行
         if (rows[rowIndex].length === 0) {
             rows.splice(rowIndex, 1);
         }
-
-        // 6. 提交状态
         commitState();
+    }
+
+    // 键盘微调逻辑
+    function nudgeSelection(delta) {
+        const targets = new Set(multiSelectedIds.value)
+        if (selectedActionId.value) targets.add(selectedActionId.value)
+        if (targets.size === 0) return
+        let hasChanged = false
+        tracks.value.forEach(track => {
+            let trackChanged = false
+            track.actions.forEach(action => {
+                if (targets.has(action.instanceId)) {
+                    let newTime = Math.round((action.startTime + delta) * 10) / 10
+                    if (newTime < 0) newTime = 0
+                    if (action.startTime !== newTime) {
+                        action.startTime = newTime
+                        trackChanged = true; hasChanged = true
+                    }
+                }
+            })
+            if (trackChanged) track.actions.sort((a, b) => a.startTime - b.startTime)
+        })
+        if (hasChanged) commitState()
     }
 
     // ===================================================================================
@@ -556,7 +567,6 @@ export const useTimelineStore = defineStore('timeline', () => {
         const charInfo = characterRoster.value.find(c => c.id === trackId);
         if (!charInfo) return [];
 
-        // === 获取干员是否接受队友充能 (默认为 true) ===
         const canAcceptTeamGauge = (charInfo.accept_team_gauge !== false);
 
         const libId = `${trackId}_ultimate`;
@@ -567,15 +577,11 @@ export const useTimelineStore = defineStore('timeline', () => {
         tracks.value.forEach(sourceTrack => {
             if (!sourceTrack.actions) return;
             sourceTrack.actions.forEach(action => {
-                // 1. 自己的动作
                 if (sourceTrack.id === trackId) {
                     if (action.gaugeCost > 0) events.push({ time: action.startTime, change: -action.gaugeCost });
                     if (action.gaugeGain > 0) events.push({ time: action.startTime + action.duration, change: action.gaugeGain });
                 }
-
-                // 2. 队友的动作 (Team Gauge Gain)
                 if (sourceTrack.id !== trackId && action.teamGaugeGain > 0) {
-                    // === 判断是否接受队友充能 ===
                     if (canAcceptTeamGauge) {
                         events.push({ time: action.startTime + action.duration, change: action.teamGaugeGain });
                     }
@@ -601,6 +607,71 @@ export const useTimelineStore = defineStore('timeline', () => {
         return points;
     }
 
+    // ===================================================================================
+    // 9. 浏览器本地存储 (Auto-Save & Reset)
+    // ===================================================================================
+
+    const STORAGE_KEY = 'endaxis_autosave_v2'
+
+    function initAutoSave() {
+        watch(
+            [tracks, connections, characterOverrides, systemConstants],
+            ([newTracks, newConns, newOverrides, newSys]) => {
+                if (isLoading.value) return
+                const snapshot = {
+                    version: '2.0.0',
+                    timestamp: Date.now(),
+                    tracks: newTracks,
+                    connections: newConns,
+                    characterOverrides: newOverrides,
+                    systemConstants: newSys
+                }
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot))
+            },
+            { deep: true }
+        )
+    }
+
+    function loadFromBrowser() {
+        const raw = localStorage.getItem(STORAGE_KEY)
+        if (raw) {
+            try {
+                const data = JSON.parse(raw)
+                if (data.tracks && Array.isArray(data.tracks)) {
+                    tracks.value = data.tracks
+                    connections.value = data.connections || []
+                    characterOverrides.value = data.characterOverrides || {}
+                    if (data.systemConstants) {
+                        systemConstants.value = { ...systemConstants.value, ...data.systemConstants }
+                    }
+                    historyStack.value = []
+                    historyIndex.value = -1
+                    commitState()
+                    return true
+                }
+            } catch (e) {
+                console.error("Auto-save load failed:", e)
+            }
+        }
+        return false
+    }
+
+    function resetProject() {
+        localStorage.removeItem(STORAGE_KEY)
+        tracks.value = [
+            { id: null, actions: [], initialGauge: 0, maxGaugeOverride: null },
+            { id: null, actions: [], initialGauge: 0, maxGaugeOverride: null },
+            { id: null, actions: [], initialGauge: 0, maxGaugeOverride: null },
+            { id: null, actions: [], initialGauge: 0, maxGaugeOverride: null },
+        ]
+        connections.value = []
+        characterOverrides.value = {}
+        clearSelection()
+        historyStack.value = []
+        historyIndex.value = -1
+        commitState()
+    }
+
     // === IO ===
     async function fetchGameData() {
         try {
@@ -616,7 +687,6 @@ export const useTimelineStore = defineStore('timeline', () => {
             const sortedRoster = data.characterRoster.sort((a, b) => (b.rarity || 0) - (a.rarity || 0));
             characterRoster.value = sortedRoster
             iconDatabase.value = data.ICON_DATABASE
-            // 初始化快照
             historyStack.value = []
             historyIndex.value = -1
             commitState()
@@ -638,13 +708,14 @@ export const useTimelineStore = defineStore('timeline', () => {
     }
 
     return {
-        systemConstants, isLoading, characterRoster, iconDatabase, tracks, connections, activeTrackId, timelineScrollLeft, zoomLevel, globalDragOffset, draggingSkillData,
+        systemConstants, isLoading, characterRoster, iconDatabase, tracks, connections, activeTrackId, timelineScrollLeft, globalDragOffset, draggingSkillData,
         selectedActionId, selectedLibrarySkillId, multiSelectedIds, clipboard, isLinking, linkingSourceId, linkingEffectIndex, showCursorGuide, isBoxSelectMode, cursorCurrentTime,
+        snapStep,
         teamTracksInfo, activeSkillLibrary, timeBlockWidth, ELEMENT_COLORS, getActionPositionInfo, getIncomingConnections, getCharacterElementColor, isActionSelected,
         fetchGameData, exportProject, importProject, TOTAL_DURATION, selectTrack, changeTrackOperator, selectLibrarySkill, updateLibrarySkill, selectAction, updateAction, removeAction,
-        addSkillToTrack, setDraggingSkill, setDragOffset, setScrollLeft, setZoom, calculateGlobalSpData, calculateGaugeData, calculateGlobalStaggerData, updateTrackInitialGauge, updateTrackMaxGauge,
-        startLinking, confirmLinking, cancelLinking, removeConnection, getColor, toggleCursorGuide, toggleBoxSelectMode, setCursorTime,
+        addSkillToTrack, setDraggingSkill, setDragOffset, setScrollLeft, calculateGlobalSpData, calculateGaugeData, calculateGlobalStaggerData, updateTrackInitialGauge, updateTrackMaxGauge,
+        startLinking, confirmLinking, cancelLinking, removeConnection, getColor, toggleCursorGuide, toggleBoxSelectMode, setCursorTime, toggleSnapStep, nudgeSelection,
         setMultiSelection, clearSelection, copySelection, pasteSelection, removeCurrentSelection, undo, redo, commitState,
-        removeAnomaly
+        removeAnomaly, initAutoSave, loadFromBrowser, resetProject
     }
 })
