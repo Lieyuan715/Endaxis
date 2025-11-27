@@ -38,6 +38,13 @@ const dragThreshold = 5
 const wasSelectedOnPress = ref(false)
 const dragStartTimes = new Map()
 
+// === 边缘自动滚动相关状态 (New) ===
+const autoScrollSpeed = ref(0) // 滚动的速度 (像素/帧)
+let autoScrollRaf = null       // requestAnimationFrame 的 ID
+let lastMouseX = 0             // 记录最后一次鼠标X坐标
+const SCROLL_ZONE = 50         // 距离边缘多少像素开始滚动
+const MAX_SCROLL_SPEED = 15    // 最大滚动速度
+
 let resizeObserver = null
 
 // Box Select State
@@ -81,62 +88,40 @@ function confirmCharacterSelection(charId) {
 function removeOperator() {
   if (targetTrackIndex.value !== null) {
     const track = store.tracks[targetTrackIndex.value]
-    // 直接置空
     track.id = null
-    track.actions = [] // 同时清空该轨道的动作，防止残留
-
-    // 提交历史记录 (Store 暴露了 commitState)
+    track.actions = []
     store.commitState()
-
-    // 如果当前选中的就是这个轨道，取消选中状态
-    if (store.activeTrackId === null) {
-      // 已经是 null 了不用动，或者根据需求重置
-    }
   }
   isSelectorVisible.value = false
 }
 
-// 1. 先进行基础筛选（搜索 + 元素）
 const filteredListFlat = computed(() => {
   let list = store.characterRoster
-
   if (filterElement.value !== 'ALL') {
     list = list.filter(c => c.element === filterElement.value)
   }
-
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase()
     list = list.filter(c => c.name.toLowerCase().includes(q))
   }
-
-  // 基础排序
   return list.sort((a, b) => (b.rarity || 0) - (a.rarity || 0))
 })
 
-// 2. 将筛选结果按星级分组
 const rosterByRarity = computed(() => {
   const groups = {}
-
   filteredListFlat.value.forEach(char => {
     const r = char.rarity || 1
     if (!groups[r]) groups[r] = []
     groups[r].push(char)
   })
-
-  // 获取所有存在的星级，降序排列 (6, 5, 4...)
   const levels = Object.keys(groups).map(Number).sort((a, b) => b - a)
-
-  return levels.map(level => ({
-    level: level,
-    list: groups[level]
-  }))
+  return levels.map(level => ({ level: level, list: groups[level] }))
 })
 
-// 获取星级基础颜色 (用于 style 绑定)
 function getRarityBaseColor(rarity) {
-  if (rarity === 6) return '#FFD700' // 兜底色
-  if (rarity === 5) return '#ffc400' // 金色
-  if (rarity === 4) return '#d8b4fe' // 紫色
+  if (rarity === 6) return '#FFD700'
+  if (rarity === 5) return '#ffc400'
+  if (rarity === 4) return '#d8b4fe'
   return '#a0a0a0'
 }
 
@@ -174,57 +159,30 @@ const operationMarkers = computed(() => {
   })
 
   rawMarkers.sort((a, b) => a.left - b.left)
-
+  // ... (省略具体的堆叠计算逻辑，保持原样) ...
   const finalMarkers = []
   let cluster = []
   let clusterMaxRight = -1
-
   const processCluster = (group) => {
     if (group.length === 0) return
     const levels = []
     group.forEach(m => {
       let placed = false
       for (let i = 0; i < levels.length; i++) {
-        if (levels[i] + 1 <= m.left) {
-          m.rowIndex = i
-          levels[i] = m.right
-          placed = true
-          break
-        }
+        if (levels[i] + 1 <= m.left) { m.rowIndex = i; levels[i] = m.right; placed = true; break }
       }
-      if (!placed) {
-        m.rowIndex = levels.length
-        levels.push(m.right)
-      }
+      if (!placed) { m.rowIndex = levels.length; levels.push(m.right) }
     })
-
     const depth = levels.length
     let h, step, fs
     if (depth <= 2) { h = 14; step = 16; fs = 9; }
     else if (depth === 3) { h = 12; step = 13; fs = 9; }
     else { h = 10; step = 10; fs = 8; }
-
-    group.forEach(m => {
-      m.height = h
-      m.top = m.rowIndex * step
-      m.fontSize = fs
-      finalMarkers.push(m)
-    })
+    group.forEach(m => { m.height = h; m.top = m.rowIndex * step; m.fontSize = fs; finalMarkers.push(m) })
   }
-
   rawMarkers.forEach(m => {
-    if (cluster.length === 0) {
-      cluster.push(m)
-      clusterMaxRight = m.right
-    } else {
-      if (m.left < clusterMaxRight) {
-        cluster.push(m)
-        clusterMaxRight = Math.max(clusterMaxRight, m.right)
-      } else {
-        processCluster(cluster)
-        cluster = [m]
-        clusterMaxRight = m.right
-      }
+    if (cluster.length === 0) { cluster.push(m); clusterMaxRight = m.right } else {
+      if (m.left < clusterMaxRight) { cluster.push(m); clusterMaxRight = Math.max(clusterMaxRight, m.right) } else { processCluster(cluster); cluster = [m]; clusterMaxRight = m.right }
     }
   })
   processCluster(cluster)
@@ -277,7 +235,7 @@ function syncVerticalScroll() {
 }
 
 // ===================================================================================
-// 5. 鼠标与拖拽逻辑
+// 5. 鼠标与拖拽逻辑 (含边缘自动滚动)
 // ===================================================================================
 
 const cachedSpData = computed(() => store.calculateGlobalSpData())
@@ -342,6 +300,7 @@ function onBoxMouseUp() {
   isBoxSelecting.value = false
   window.removeEventListener('mousemove', onBoxMouseMove)
   window.removeEventListener('mouseup', onBoxMouseUp)
+  // ... (框选计算逻辑保持不变) ...
   const box = boxRect.value
   const selection = {
     left: box.width > 0 ? box.left : box.left + box.width,
@@ -392,23 +351,28 @@ function onActionMouseDown(evt, track, action) {
   window.addEventListener('blur', onWindowMouseUp)
 }
 
-function onWindowMouseMove(evt) {
-  if (!isMouseDown.value) return
-  if (evt.buttons === 0) { onWindowMouseUp(evt); return }
-  const target = evt.target
-  const isForm = target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
-  const isSidebar = target && (target.closest('.properties-sidebar') || target.closest('.action-library'))
-  if (isForm || isSidebar) { onWindowMouseUp(evt); return }
-  if (!isDragStarted.value) {
-    const dist = Math.sqrt(Math.pow(evt.clientX - initialMouseX.value, 2) + Math.pow(evt.clientY - initialMouseY.value, 2))
-    if (dist > dragThreshold) isDragStarted.value = true; else return
-  }
-  const newLeaderTime = calculateTimeFromEvent(evt)
+// === 核心逻辑提取：更新拖拽位置 ===
+function updateDragPosition(clientX) {
+  if (!isDragStarted.value || !movingActionId.value) return
+
+  // 构造伪造事件对象，因为 calculateTimeFromEvent 依赖 evt.clientX
+  const fakeEvent = { clientX: clientX }
+  const newLeaderTime = calculateTimeFromEvent(fakeEvent)
+
   const leaderOriginalTime = dragStartTimes.get(movingActionId.value)
   if (leaderOriginalTime === undefined) return
+
   const timeDelta = newLeaderTime - leaderOriginalTime
+
+  // 检查移动是否合法 (所有选中的块都不能小于 0)
   let isValidMove = true
-  for (const [id, originalTime] of dragStartTimes) { if (originalTime + timeDelta < 0) { isValidMove = false; break } }
+  for (const [id, originalTime] of dragStartTimes) {
+    if (originalTime + timeDelta < 0) {
+      isValidMove = false;
+      break
+    }
+  }
+
   if (isValidMove) {
     let hasChanged = false
     store.tracks.forEach(t => {
@@ -417,7 +381,11 @@ function onWindowMouseMove(evt) {
         if (store.multiSelectedIds.has(a.instanceId)) {
           const original = dragStartTimes.get(a.instanceId)
           const targetTime = Math.max(0, original + timeDelta)
-          if (a.startTime !== targetTime) { a.startTime = targetTime; trackChanged = true; hasChanged = true }
+          if (a.startTime !== targetTime) {
+            a.startTime = targetTime
+            trackChanged = true
+            hasChanged = true
+          }
         }
       })
       if (trackChanged) t.actions.sort((a, b) => a.startTime - b.startTime)
@@ -426,7 +394,81 @@ function onWindowMouseMove(evt) {
   }
 }
 
+// === 核心逻辑提取：执行自动滚动 ===
+function performAutoScroll() {
+  if (autoScrollSpeed.value === 0 || !tracksContentRef.value) {
+    cancelAnimationFrame(autoScrollRaf)
+    autoScrollRaf = null
+    return
+  }
+
+  // 1. 执行滚动
+  tracksContentRef.value.scrollLeft += autoScrollSpeed.value
+
+  // 2. 同步标尺
+  syncRulerScroll()
+
+  // 3. 滚动改变了 scrollLeft，需要用“上一次的鼠标位置”重新计算动作块的新时间
+  updateDragPosition(lastMouseX)
+
+  // 4. 循环
+  autoScrollRaf = requestAnimationFrame(performAutoScroll)
+}
+
+function onWindowMouseMove(evt) {
+  if (!isMouseDown.value) return
+  if (evt.buttons === 0) { onWindowMouseUp(evt); return }
+  const target = evt.target
+  const isForm = target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+  const isSidebar = target && (target.closest('.properties-sidebar') || target.closest('.action-library'))
+  if (isForm || isSidebar) { onWindowMouseUp(evt); return }
+
+  // 拖拽阈值检测
+  if (!isDragStarted.value) {
+    const dist = Math.sqrt(Math.pow(evt.clientX - initialMouseX.value, 2) + Math.pow(evt.clientY - initialMouseY.value, 2))
+    if (dist > dragThreshold) isDragStarted.value = true; else return
+  }
+
+  // === 边缘自动滚动检测 ===
+  lastMouseX = evt.clientX // 更新全局鼠标位置
+  if (tracksContentRef.value) {
+    const rect = tracksContentRef.value.getBoundingClientRect()
+    // 左边缘检测
+    if (evt.clientX < rect.left + SCROLL_ZONE) {
+      const ratio = 1 - (Math.max(0, evt.clientX - rect.left) / SCROLL_ZONE)
+      autoScrollSpeed.value = -Math.max(2, ratio * MAX_SCROLL_SPEED) // 最小速度2，最大15
+    }
+    // 右边缘检测
+    else if (evt.clientX > rect.right - SCROLL_ZONE) {
+      const ratio = 1 - (Math.max(0, rect.right - evt.clientX) / SCROLL_ZONE)
+      autoScrollSpeed.value = Math.max(2, ratio * MAX_SCROLL_SPEED)
+    }
+    // 中间区域
+    else {
+      autoScrollSpeed.value = 0
+    }
+
+    // 启动循环
+    if (autoScrollSpeed.value !== 0 && !autoScrollRaf) {
+      performAutoScroll()
+    }
+  }
+
+  // 如果没有在自动滚动，则手动更新位置
+  // (实际上如果正在自动滚动，updateDragPosition 会被 RAF 调用；这里为了流畅性，可以双重调用或者仅在非滚动时调用)
+  if (autoScrollSpeed.value === 0) {
+    updateDragPosition(evt.clientX)
+  }
+}
+
 function onWindowMouseUp(evt) {
+  // === 停止自动滚动 ===
+  autoScrollSpeed.value = 0
+  if (autoScrollRaf) {
+    cancelAnimationFrame(autoScrollRaf)
+    autoScrollRaf = null
+  }
+
   const _wasDragging = isDragStarted.value
   try {
     if (!isDragStarted.value && movingActionId.value) {
@@ -629,38 +671,38 @@ onUnmounted(() => {
         </div>
       </div>
 
-    <div class="roster-scroll-container">
-      <template v-for="group in rosterByRarity" :key="group.level">
-        <div class="rarity-header" :class="`header-rarity-${group.level}`">
-          <span class="rarity-label" :style="{ color: getRarityBaseColor(group.level) }">{{ group.level }} ★</span>
-          <div class="rarity-line" :style="{ backgroundColor: getRarityBaseColor(group.level) }"></div>
-        </div>
+      <div class="roster-scroll-container">
+        <template v-for="group in rosterByRarity" :key="group.level">
+          <div class="rarity-header" :class="`header-rarity-${group.level}`">
+            <span class="rarity-label" :style="{ color: getRarityBaseColor(group.level) }">{{ group.level }} ★</span>
+            <div class="rarity-line" :style="{ backgroundColor: getRarityBaseColor(group.level) }"></div>
+          </div>
 
-        <div class="roster-grid">
-          <div v-for="char in group.list" :key="char.id" class="roster-card"
-               :class="[
+          <div class="roster-grid">
+            <div v-for="char in group.list" :key="char.id" class="roster-card"
+                 :class="[
                  { 'is-selected': store.tracks.some(t => t.id === char.id) },
                  `rarity-${char.rarity}-style`
                ]"
-               @click="confirmCharacterSelection(char.id)">
-            <div
-                class="card-avatar-wrapper"
-                :style="char.rarity === 6 ? {} : { borderColor: getRarityBaseColor(char.rarity) }"
-            >
-              <img :src="char.avatar" loading="lazy" />
-              <div class="element-badge" :style="{ background: store.getColor(char.element) }"></div>
+                 @click="confirmCharacterSelection(char.id)">
+              <div
+                  class="card-avatar-wrapper"
+                  :style="char.rarity === 6 ? {} : { borderColor: getRarityBaseColor(char.rarity) }"
+              >
+                <img :src="char.avatar" loading="lazy" />
+                <div class="element-badge" :style="{ background: store.getColor(char.element) }"></div>
+              </div>
+              <div class="card-name">{{ char.name }}</div>
+              <div v-if="store.tracks.some(t => t.id === char.id)" class="in-team-tag">已上场</div>
             </div>
-            <div class="card-name">{{ char.name }}</div>
-            <div v-if="store.tracks.some(t => t.id === char.id)" class="in-team-tag">已上场</div>
           </div>
-        </div>
-      </template>
+        </template>
 
-      <div v-if="rosterByRarity.length === 0" class="empty-roster">
-        没有找到匹配的干员
+        <div v-if="rosterByRarity.length === 0" class="empty-roster">
+          没有找到匹配的干员
+        </div>
       </div>
-    </div>
-  </el-dialog>
+    </el-dialog>
   </div>
 </template>
 

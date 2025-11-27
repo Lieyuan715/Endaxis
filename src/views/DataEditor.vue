@@ -356,7 +356,17 @@ function setRowDelay(char, skillType, rowIndex, val) {
             <div v-show="activeTab === type" class="form-section">
               <h3 class="section-title">数值配置</h3>
               <div class="form-grid three-col">
+                <div class="form-group" v-if="type === 'skill' || type === 'ultimate'">
+                  <label>技能属性</label>
+                  <select v-model="selectedChar[`${type}_element`]">
+                    <option :value="undefined">默认 (跟随干员)</option>
+                    <option v-for="elm in ELEMENTS" :key="elm.value" :value="elm.value">
+                      {{ elm.label }}
+                    </option>
+                  </select>
+                </div>
                 <div class="form-group"><label>持续时间 (s)</label><input type="number" step="0.1" v-model.number="selectedChar[`${type}_duration`]"></div>
+
                 <div class="form-group" v-if="type !== 'link'"><label>SP 回复</label><input type="number" v-model.number="selectedChar[`${type}_spGain`]"></div>
 
                 <div class="form-group" v-if="type === 'attack' || type === 'skill' || type === 'link' || type === 'ultimate'"><label>失衡值</label><input type="number" v-model.number="selectedChar[`${type}_stagger`]"></div>
