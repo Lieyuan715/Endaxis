@@ -1,10 +1,14 @@
 # Endfield Timeline Editor - 《明日方舟：终末地》排轴工具
 
-
-
-**Endaxis** 是一个基于 Web 的可视化时间轴编辑工具，专为《明日方舟：终末地》设计。它允许玩家规划角色技能释放顺序，可视化技能连携（连招）依赖关系，从而优化战术执行流程。
+**Endaxis** 是一个基于 Web 专为《明日方舟：终末地》设计的可视化时间轴编辑工具。
 
 > ⚠️ **注意**：本项目是一个粉丝自制工具，目前处于开发阶段。
+
+## 🌐 在线体验 (Live Demo)
+
+**项目已部署，点击下方链接即可直接使用：**
+
+👉 **[http://39.106.68.30/Endaxis/](http://39.106.68.30/Endaxis/)**
 
 ## 目前所能实现的效果
 
@@ -29,7 +33,22 @@
 * **拖拽库**: [Vue.Draggable](https://github.com/SortableJS/vue.draggable.next)
 * **样式**: CSS Grid + CSS Variables
 
-## 🚀 快速开始 (Getting Started)
+## 🔧 开发者工具 (Developer Tools)
+
+项目内置了一个隐藏的数据编辑器，用于生成 `gamedata.json` 文件。
+
+**访问地址：**
+* **在线版**：[http://39.106.68.30/Endaxis/editor](http://39.106.68.30/Endaxis/editor)
+* **本地开发**：`http://localhost:5173/Endaxis/editor`
+
+**使用说明：**
+1. 访问上述页面。
+2. 在此页面可以添加新干员、修改技能属性（CD、消耗、倍率等）。
+3. 点击“生成并下载”按钮，将下载的文件覆盖项目中的 `public/gamedata.json` 即可更新数据。
+
+## 🚀 本地开发 (Local Development)
+
+如果你想在本地运行或参与开发：
 
 ### 环境要求
 
@@ -48,21 +67,4 @@ npm install
 npm run dev
 ```
 
-启动后访问 `http://localhost:5173` 即可看到排轴器界面。
-
-### 构建生产版本
-
-```bash
-npm run build
-```
-
-
-## 🔧 开发者工具 (Developer Tools)
-
-项目内置了一个隐藏的数据编辑器，用于生成 `public/gamedata.json` 文件。
-
-1.  启动项目。
-2.  访问 `http://localhost:5173/editor`。
-3.  在此页面可以添加新干员、修改技能属性（CD、消耗、倍率等）。
-4.  点击“生成并下载”按钮，将下载的文件覆盖项目中的 `public/gamedata.json` 即可更新数据。
-
+启动后访问 `http://localhost:5173/Endaxis` 即可看到排轴器界面。

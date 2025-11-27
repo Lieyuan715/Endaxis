@@ -13,7 +13,19 @@ import StaggerMonitor from '../components/StaggerMonitor.vue'
 
 const store = useTimelineStore()
 
-// === 1. 文件导入相关 ===
+// === 关于弹窗逻辑 ===
+const aboutDialogVisible = ref(false)
+
+// 用户第一次访问时自动弹出
+onMounted(() => {
+  const hasSeenIntro = localStorage.getItem('endaxis_has_seen_intro')
+  if (!hasSeenIntro) {
+    aboutDialogVisible.value = true
+    localStorage.setItem('endaxis_has_seen_intro', 'true')
+  }
+})
+
+// === 文件导入相关 ===
 const fileInputRef = ref(null)
 
 function triggerImport() {
@@ -35,7 +47,7 @@ async function onFileSelected(event) {
   }
 }
 
-// === 2. 导出长图相关 ===
+// === 导出长图相关 ===
 const exportDialogVisible = ref(false)
 const exportForm = ref({ filename: '', duration: 60 })
 
@@ -144,7 +156,7 @@ async function processExport() {
   }
 }
 
-// === 3. 重置与快捷键 ===
+// === 重置与快捷键 ===
 function handleReset() {
   ElMessageBox.confirm(
       '确定要清空当前所有进度吗？此操作无法撤销，且会清除浏览器缓存。',
@@ -195,6 +207,12 @@ onUnmounted(() => { window.removeEventListener('keydown', handleGlobalKeydown) }
         <div class="header-controls">
           <input type="file" ref="fileInputRef" style="display: none" accept=".json" @change="onFileSelected" />
 
+          <button class="control-btn info-btn" @click="aboutDialogVisible = true" title="查看教程与项目信息">
+            ℹ️ 关于
+          </button>
+
+          <div class="divider-vertical"></div>
+
           <button class="control-btn danger-btn" @click="handleReset" title="清空所有内容">🗑️ 重置</button>
           <div class="divider-vertical"></div>
 
@@ -222,6 +240,46 @@ onUnmounted(() => { window.removeEventListener('keydown', handleGlobalKeydown) }
       </div>
       <template #footer><span class="dialog-footer"><el-button @click="exportDialogVisible = false">取消</el-button><el-button type="primary" @click="processExport">开始导出</el-button></span></template>
     </el-dialog>
+
+    <el-dialog
+        v-model="aboutDialogVisible"
+        title="关于 Endaxis"
+        width="500px"
+        align-center
+        class="custom-dialog"
+    >
+      <div class="about-content">
+        <div class="about-section">
+          <h3>欢迎使用</h3>
+          <p>Endaxis 是一个专为《明日方舟：终末地》设计的可视化排轴工具。你可以通过拖拽技能、建立连线关系来规划战术流程。</p>
+        </div>
+
+        <div class="about-section">
+          <h3>链接与资源</h3>
+          <ul class="link-list">
+            <li>
+              <span class="link-label">📺 视频教程：</span>
+              <a href="#" target="_blank" class="highlight-link">
+                点击观看 Bilibili 教程 (待补充)
+              </a>
+            </li>
+            <li>
+              <span class="link-label">💻 项目仓库：</span>
+              <a href="https://github.com/Lieyuan621/Endaxis" target="_blank" class="highlight-link">
+                GitHub 仓库
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button type="primary" @click="aboutDialogVisible = false">开始使用</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -249,6 +307,13 @@ onUnmounted(() => { window.removeEventListener('keydown', handleGlobalKeydown) }
 .export-img-btn:hover { border-color: #e6a23c; color: #e6a23c; background-color: rgba(230, 162, 60, 0.1); }
 .danger-btn:hover { border-color: #ff7875; color: #ff7875; background-color: rgba(255, 77, 79, 0.1); }
 
+/* 关于按钮颜色 */
+.info-btn:hover {
+  border-color: #00e5ff;
+  color: #00e5ff;
+  background-color: rgba(0, 229, 255, 0.1);
+}
+
 /* Workspace & Panels */
 .timeline-workspace { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; }
 .timeline-grid-container { flex-grow: 1; overflow: hidden; min-height: 0; }
@@ -266,6 +331,56 @@ onUnmounted(() => { window.removeEventListener('keydown', handleGlobalKeydown) }
 .form-item label { display: block; margin-bottom: 8px; font-weight: bold; color: #ccc; }
 .hint { font-size: 12px; color: #888; margin-top: 6px; }
 
+/* 关于弹窗内容样式 */
+.about-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  color: #ccc;
+  line-height: 1.6;
+}
+
+.about-section h3 {
+  margin: 0 0 10px 0;
+  color: #ffd700;
+  font-size: 15px;
+  border-left: 3px solid #ffd700;
+  padding-left: 8px;
+}
+
+.about-section p { margin: 0; font-size: 13px; }
+
+.link-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.link-list li { display: flex; align-items: center; font-size: 13px; }
+
+.link-label { color: #aaa; margin-right: 5px; }
+
+.highlight-link {
+  color: #00e5ff;
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(0, 229, 255, 0.5);
+  transition: all 0.2s;
+}
+
+.highlight-link:hover { color: #fff; border-bottom-style: solid; }
+
+.notice-text {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 10px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 12px;
+  color: #aaa;
+}
+
 /* Dark Mode Adapter for Element Plus Dialog */
 :deep(.el-dialog) { background-color: #2b2b2b; border: 1px solid #444; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
 :deep(.el-dialog__header) { margin-right: 0; border-bottom: 1px solid #3a3a3a; padding: 15px 20px; }
@@ -276,7 +391,7 @@ onUnmounted(() => { window.removeEventListener('keydown', handleGlobalKeydown) }
 :deep(.el-input__inner) { color: white; height: 36px; line-height: 36px; }
 :deep(.el-input__wrapper:hover) { box-shadow: 0 0 0 1px #666 inset; }
 :deep(.el-input__wrapper.is-focus) { box-shadow: 0 0 0 1px #ffd700 inset; }
-:deep(.el-button) { background: #3a3a3a; border-color: #555; color: #ccc; height: 36px; }
+:deep(.el-button) { background: #3a3a3a; border-color: #555; color: #ccc; height: 36px; display: inline-flex; justify-content: center; align-items: center; border-bottom: none !important; outline: none !important; }
 :deep(.el-button:hover) { background: #444; color: white; border-color: #777; }
 :deep(.el-button--primary) { background: #ffd700; border-color: #ffd700; color: #000; font-weight: bold; }
 :deep(.el-button--primary:hover) { background: #ffec3d; border-color: #ffec3d; color: #000; }
