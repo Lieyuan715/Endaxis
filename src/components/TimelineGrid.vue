@@ -606,7 +606,7 @@ onUnmounted(() => {
 
       <div class="cursor-guide" :style="{ left: `${cursorX}px` }" v-show="isCursorVisible && store.showCursorGuide && !store.isBoxSelectMode">
         <div class="guide-time-label">{{ (cursorX / TIME_BLOCK_WIDTH).toFixed(1) }}s</div>
-        <div class="guide-sp-label">SP: {{ currentSpValue }}</div>
+        <div class="guide-sp-label">技力: {{ currentSpValue }}</div>
       </div>
 
       <div v-if="isBoxSelecting" class="selection-box-overlay" :style="{ left: `${boxRect.left}px`, top: `${boxRect.top}px`, width: `${boxRect.width}px`, height: `${boxRect.height}px` }"></div>

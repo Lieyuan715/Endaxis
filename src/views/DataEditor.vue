@@ -85,7 +85,7 @@ function addNewCharacter() {
     id: newId, name: "新干员", rarity: 5, element: "physical", avatar: "/avatars/default.png", exclusive_buffs: [],
     accept_team_gauge: true,
     attack_duration: 2.5, attack_spGain: 15, attack_stagger: 0, attack_allowed_types: allGlobalEffects, attack_anomalies: [],
-    skill_duration: 2, skill_spCost: 100, skill_spGain: 0, skill_stagger: 0, skill_gaugeGain: 0, skill_teamGaugeGain: 6, skill_allowed_types: [], skill_anomalies: [],
+    skill_duration: 2, skill_spCost: 100, skill_spGain: 0, skill_stagger: 0, skill_gaugeGain: 0, skill_teamGaugeGain: 0, skill_allowed_types: [], skill_anomalies: [],
     link_duration: 1.5, link_cooldown: 15, link_spGain: 0, link_stagger: 0, link_gaugeGain: 0, link_allowed_types: [], link_anomalies: [],
     ultimate_duration: 3, ultimate_gaugeMax: 100, ultimate_spGain: 0, ultimate_stagger: 0, ultimate_gaugeReply: 0, ultimate_allowed_types: [], ultimate_anomalies: [],
     execution_duration: 1.5, execution_spGain: 20, execution_allowed_types: allGlobalEffects, execution_anomalies: [],
