@@ -255,12 +255,18 @@ onUnmounted(() => { window.removeEventListener('keydown', handleGlobalKeydown) }
         </div>
 
         <div class="about-section">
-          <h3>链接与资源</h3>
+          <h3>🔗 链接与资源</h3>
           <ul class="link-list">
             <li>
               <span class="link-label">📺 视频教程：</span>
               <a href="#" target="_blank" class="highlight-link">
                 点击观看 Bilibili 教程 (待补充)
+              </a>
+            </li>
+            <li>
+              <span class="link-label">📝 文本教程：</span>
+              <a href="https://gx3qqg8r3jk.feishu.cn/wiki/TUTyw3s32iPsAXkCfl0cCE0VnOj" target="_blank" class="highlight-link">
+                点击查看使用文档
               </a>
             </li>
             <li>
